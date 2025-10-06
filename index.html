@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LUMIX Cliente">
+    <meta name="theme-color" content="#6f42c1">
+    <title>Portal do Cliente</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent-green: #28a745;
+            --accent-yellow: #facc15;
+            --accent-orange: #fb923c;
+            --accent-purple: #6f42c1;
+            --accent-purple-darker: #5a349c;
+            --border-color: #e9ecef;
+            --danger-color: #dc3545;
+        }
+        body.dark-mode {
+            --bg: #020617;
+            --surface: #0f172a;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --border-color: #1e293b;
+            --danger-color: #f87171;
+            --accent-yellow: #fde047;
+            --accent-orange: #fdba74;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; 
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-primary); transition: background-color 0.3s, color 0.3s; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.9; }
+        }
+
+        @keyframes subtle-glow {
+          0%, 100% {
+            filter: drop-shadow(0 0 8px rgba(138, 43, 226, 0.7));
+          }
+          50% {
+            filter: drop-shadow(0 0 16px rgba(57, 255, 20, 0.7));
+          }
+        }
+
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease-out;
+        }
+        #splash-screen img {
+            width: 150px; 
+            height: 150px; 
+            animation: pulse 2.5s infinite ease-in-out;
+        }
+
+        #login-view {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            padding: 20px;
+            background-color: var(--bg);
+        }
+        .login-card {
+            background-color: transparent;
+            box-shadow: none;
+            border: none;
+            width: 100%; max-width: 400px; text-align: center;
+        }
+        .login-card .logo {
+            display: flex;
+            justify-content: center;
+        }
+        .login-card .logo img {
+            width: 140px; 
+            height: 140px; 
+            margin-bottom: 30px; 
+            animation: subtle-glow 5s ease-in-out infinite;
+        }
+        .login-card h2 {
+            margin-bottom: 10px;
+            font-size: 1.8em; 
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .login-card p {
+            margin-bottom: 40px;
+            color: var(--text-secondary);
+        }
+        .login-card .form-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .login-card .form-group label {
+             display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);
+        }
+        .login-card .form-group input { 
+            width: 100%; 
+            padding: 15px; 
+            font-size: 1em; 
+            border-radius: 8px; 
+            border: 1px solid #334155; 
+            background-color: #1e293b; 
+            color: var(--text-primary); 
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .login-card .form-group input:focus {
+            border-color: var(--accent-purple);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.3);
+        }
+
+        .login-card .btn-primary {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: var(--accent-purple);
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .login-card .btn-primary:hover {
+            background-color: var(--accent-purple-darker);
+        }
+
+        #app-container { 
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+        }
+        main {
+            flex-grow: 1; 
+            overflow-y: auto; 
+        }
+        .container { padding: 20px; }
+        
+        .main-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background-color: var(--surface); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; transition: background-color 0.3s, border-color 0.3s; flex-shrink: 0; }
+        .logo { display: flex; align-items: center; gap: 10px; }
+        .logo img { height: 40px; width: 40px; object-fit: cover; }
+        .logo-text { font-size: 1.2em; font-weight: 700; color: var(--text-primary); }
+        .header-controls { display: flex; align-items: center; gap: 10px; }
+        .header-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .lang-dropdown { display: none; position: absolute; top: 40px; right: 0; background-color: var(--surface); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border: 1px solid var(--border-color); overflow: hidden; z-index: 110; }
+        .lang-dropdown button { display: block; width: 100%; text-align: left; padding: 10px 15px; background: none; border: none; color: var(--text-primary); cursor: pointer; }
+        .profile { display: flex; align-items: center; gap: 10px; text-align: right; }
+        .profile-info { font-weight: 500; font-size: 0.9em; display: none; } /* Hide by default on smaller screens */
+        @media (min-width: 420px) { .profile-info { display: block; } } /* Show on slightly larger screens */
+        .profile img { height: 40px; width: 40px; border-radius: 50%; border: 2px solid var(--accent-purple); object-fit: cover; }
+
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .kpi-card { background-color: var(--surface); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
+        body.dark-mode .kpi-card { box-shadow: none; }
+        .kpi-title { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-secondary); margin: 0 0 10px; }
+        .kpi-value { font-size: 1.8em; font-weight: 700; margin: 0; }
+        .kpi-value.green { color: var(--accent-green); }
+        .kpi-value.purple { color: var(--accent-purple); }
+
+        .progress-card { text-align: center; }
+        .progress-circle { position: relative; width: 120px; height: 120px; margin: 0 auto 15px; }
+        .progress-circle svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .progress-circle circle { fill: none; stroke-width: 10; }
+        .progress-circle .bg-circle { stroke: var(--border-color); }
+        .progress-circle .progress-bar { stroke: var(--accent-purple); stroke-linecap: round; transition: stroke-dashoffset 1s ease-out; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; font-weight: 700; }
+        
+        .reputation-card { padding-bottom: 10px; }
+        .reputation-bar-container { width: 100%; background-color: var(--border-color); border-radius: 8px; height: 16px; overflow: hidden; margin-bottom: 10px; }
+        .reputation-bar { height: 100%; border-radius: 8px; width: 0%; transition: width 1s ease-out, background-color 0.5s; }
+        .reputation-bar.status-perfect { background-color: var(--accent-green); }
+        .reputation-bar.status-good { background-color: var(--accent-orange); }
+        .reputation-bar.status-regular { background-color: var(--accent-yellow); }
+        .reputation-bar.status-bad { background-color: var(--danger-color); }
+        .reputation-status { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+        .reputation-value { font-weight: 700; }
+        .reputation-text { font-weight: 500; padding: 2px 8px; border-radius: 10px; }
+        .reputation-text.status-perfect { color: var(--accent-green); background-color: rgba(40, 167, 69, 0.1); }
+        .reputation-text.status-good { color: #b45309; background-color: rgba(251, 146, 60, 0.15); }
+        body.dark-mode .reputation-text.status-good { color: var(--accent-orange); background-color: rgba(253, 186, 116, 0.1); }
+        .reputation-text.status-regular { color: #856404; background-color: rgba(250, 204, 21, 0.15); }
+        body.dark-mode .reputation-text.status-regular { color: var(--accent-yellow); background-color: rgba(253, 224, 71, 0.1); }
+        .reputation-text.status-bad { color: var(--danger-color); background-color: rgba(220, 53, 69, 0.1); }
+        .reputation-info { font-size: 0.8em; color: var(--text-secondary); margin-top: 15px; text-align: center; }
+
+
+        .section-title { font-size: 1.3em; font-weight: 600; margin-bottom: 20px; border-bottom: 2px solid var(--accent-purple); padding-bottom: 10px; }
+        .payment-history-list { display: flex; flex-direction: column; gap: 10px; }
+        .payment-history-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--surface); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; }
+        .payment-date { color: var(--text-secondary); font-size: 0.9em; }
+        .payment-amount { font-weight: 600; }
+        .payment-status-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .payment-status-tag { font-size: 0.75em; font-weight: 500; padding: 3px 8px; border-radius: 10px; }
+        .payment-status-tag.pending { background-color: rgba(250, 204, 21, 0.15); color: #856404; }
+        .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.1); color: var(--accent-green); }
+        body.dark-mode .payment-status-tag.pending { background-color: rgba(253, 224, 71, 0.1); color: var(--accent-yellow); }
+        body.dark-mode .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
+        .no-history { color: var(--text-secondary); text-align: center; padding: 20px; }
+
+        .bottom-nav { position: static; flex-shrink: 0; background-color: var(--surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05); transition: background-color 0.3s, border-color 0.3s; z-index: 150; }
+        body.dark-mode .bottom-nav { box-shadow: none; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-secondary); text-decoration: none; font-size: 0.8em; padding: 5px 15px; cursor: pointer; }
+        .nav-item.active { color: var(--accent-purple); }
+        
+        .view { display: none; }
+        .view.active { display: block; }
+
+        .profile-pic-wrapper { position: relative; cursor: pointer; }
+        .profile-pic-wrapper::after { content: '✎'; position: absolute; bottom: 5px; right: 5px; background-color: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .profile-pic-wrapper img.loading { opacity: 0.5; }
+        #profile-view-img { width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--accent-purple); object-fit: cover; }
+        
+        .settings-item { display: flex; align-items: center; gap: 15px; background-color: var(--surface); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; cursor: pointer; font-weight: 500; text-decoration: none; color: var(--text-primary); }
+        .settings-item.logout { color: var(--danger-color); }
+        .settings-item.logout i { color: var(--danger-color); }
+
+        .modal-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg); z-index: 200; transform: translateX(100%); transition: transform 0.3s ease-in-out; display: flex; flex-direction: column; }
+        .modal-view.active { transform: translateX(0); }
+        .modal-header { display: flex; align-items: center; padding: 15px 20px; background-color: var(--surface); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 210; flex-shrink: 0; }
+        .modal-header button { background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0; margin-right: 15px; }
+        .modal-title { font-size: 1.2em; font-weight: 600; }
+        .modal-content-wrapper { flex-grow: 1; overflow-y: auto; }
+        .action-buttons { background-color: var(--surface); border-top: 1px solid var(--border-color); padding: 15px 20px; display: flex; gap: 15px; margin-top: auto; position: sticky; bottom: 0; flex-shrink: 0; }
+        .action-buttons button { flex-grow: 1; padding: 15px; font-size: 1em; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-primary { background-color: var(--accent-purple); color: white; }
+        .btn-secondary { background-color: var(--bg); color: var(--text-primary); border: 1px solid var(--border-color); }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-size: 0.9em; font-weight: 500; color: var(--text-secondary); }
+        .form-group input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background-color: var(--surface); color: var(--text-primary); }
+
+        #cropper-container { height: calc(100% - 150px); }
+        #cropper-container img { max-width: 100%; height: auto; }
+        
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .toast { background-color: #333; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-size: 0.9em; opacity: 0; transform: translateY(-20px); transition: opacity 0.3s, transform 0.3s; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.toast-error { background-color: var(--danger-color); }
+
+        #pix-qr-code { max-width: 200px; margin: 10px auto; display: block; border-radius: 8px; }
+        #pix-copy-paste-code { width: 100%; padding: 10px; border-radius: 8px; background-color: var(--border-color); border: none; font-family: monospace; font-size: 0.9em; resize: none; }
+        .upload-receipt-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed var(--border-color); padding: 20px; border-radius: 12px; cursor: pointer; text-align: center; }
+        #receipt-preview { max-width: 100px; max-height: 100px; margin-top: 10px; border-radius: 8px; }
+        
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="splash-screen">
+        <img id="splash-logo" src="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png" alt="Logo">
+    </div>
+
+    <div id="login-view">
+        <div class="login-card">
+            <div class="logo">
+                <img id="login-logo" src="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png" alt="Logo">
+            </div>
+            <h2 data-lang-key="welcome"></h2>
+            <p data-lang-key="welcomeMsg"></p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username" data-lang-key="username"></label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password" data-lang-key="password"></label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn-primary" data-lang-key="loginBtn"></button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-container">
+        <header class="main-header">
+            <div class="logo">
+                <img id="header-logo" src="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png" alt="Logo da Empresa">
+                <span class="logo-text" data-lang-key="appTitle"></span>
+            </div>
+            <div class="header-controls">
+                <div style="position: relative;">
+                    <button class="header-btn" id="lang-toggle"><i data-lucide="globe"></i></button>
+                    <div class="lang-dropdown" id="lang-dropdown" style="display: none;"><button data-lang="pt">Português</button><button data-lang="es">Español</button><button data-lang="en">English</button></div>
+                </div>
+                <button class="header-btn" id="theme-toggle"><i data-lucide="moon"></i></button>
+                <div class="profile">
+                    <span class="profile-info" id="greeting-text"></span>
+                    <img id="header-profile-img" src="" alt="Foto do Cliente">
+                </div>
+            </div>
+        </header>
+        <main>
+            <div id="home-view" class="view active container">
+                <div class="kpi-card progress-card" style="margin-bottom: 20px;">
+                    <h3 class="kpi-title" style="justify-content: center;" data-lang-key="loanProgress"></h3>
+                    <div class="progress-circle">
+                        <svg><circle class="bg-circle" cx="60" cy="60" r="54"></circle><circle id="progress-bar" class="progress-bar" cx="60" cy="60" r="54" style="stroke-dasharray: 339.292;"></circle></svg>
+                        <div class="progress-text" id="progress-text"></div>
+                    </div>
+                </div>
+                
+                <div id="reputation-card" class="kpi-card reputation-card">
+                   <h3 class="kpi-title" data-lang-key="reputationScore"></h3>
+                   <div class="reputation-bar-container">
+                       <div id="reputation-bar" class="reputation-bar"></div>
+                   </div>
+                   <div class="reputation-status">
+                       <span id="reputation-value" class="reputation-value"></span>
+                       <span id="reputation-text" class="reputation-text"></span>
+                   </div>
+                   <p class="reputation-info" data-lang-key="reputationInfo"></p>
+                </div>
+
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-top: 20px;">
+                    <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="coins"></i><span data-lang-key="totalValue"></span></h3><p class="kpi-value" id="total-value"></p></div>
+                    <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="dollar-sign"></i><span data-lang-key="remainingValue"></span></h3><p class="kpi-value purple" id="remaining-value"></p></div>
+                     <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="receipt"></i><span data-lang-key="installmentValue"></span></h3><p class="kpi-value purple" id="kpi-installment-value"></p></div>
+                </div>
+                <section><h2 class="section-title" data-lang-key="paymentHistory"></h2><div id="payment-history-list" class="payment-history-list"></div></section>
+            </div>
+            <div id="pay-view" class="view container">
+                <h2 class="section-title" data-lang-key="payInstallment"></h2>
+                <div class="kpi-card" style="margin-bottom: 20px;">
+                    <h3 class="kpi-title" data-lang-key="qrCodePayment"></h3>
+                    <img id="pix-qr-code" src="https://placehold.co/200x200/eee/ccc?text=Loading..." alt="PIX QR Code">
+                    <textarea id="pix-copy-paste-code" rows="3" readonly></textarea>
+                    <button class="btn-primary" id="copy-pix-code-btn" style="width:100%; margin-top:10px;"><i data-lucide="copy"></i> <span data-lang-key="copyCode"></span></button>
+                </div>
+                <div class="kpi-card" style="margin-bottom: 20px;">
+                     <h3 class="kpi-title" data-lang-key="manualPayment"></h3>
+                     <p data-lang-key="manualPixKey"></p>
+                     <div style="display:flex; gap:10px; align-items:center;">
+                         <strong id="manual-pix-key-value" style="background-color: var(--border-color); padding: 10px; border-radius: 8px; flex-grow:1; text-align: center;"></strong>
+                         <button class="btn-primary" id="copy-manual-key-btn" style="flex-shrink:0;"><i data-lucide="copy"></i></button>
+                     </div>
+                </div>
+                 <div class="kpi-card">
+                    <h3 class="kpi-title" data-lang-key="uploadReceipt"></h3>
+                    <div class="form-group">
+                        <label for="receipt-amount" data-lang-key="paymentAmountLabel"></label>
+                        <input type="number" id="receipt-amount" step="0.01" placeholder="0.00" class="form-control">
+                    </div>
+                     <label for="receipt-file-input" class="upload-receipt-btn">
+                         <i data-lucide="upload-cloud"></i>
+                         <span id="upload-label-text">Clique para anexar</span>
+                         <img id="receipt-preview" style="display:none;">
+                     </label>
+                     <input type="file" id="receipt-file-input" accept="image/*" style="display:none;">
+                     <button class="btn-primary" id="submit-receipt-btn" style="width:100%; margin-top:15px;" disabled><i data-lucide="send"></i> <span data-lang-key="submitForVerification"></span></button>
+                 </div>
+            </div>
+            <div id="refinance-view" class="view container"></div>
+            <div id="profile-view" class="view container">
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 30px;">
+                   <label for="profile-pic-input" class="profile-pic-wrapper">
+                       <img id="profile-view-img" src="" alt="Foto do Cliente">
+                   </label>
+                   <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                   <h2 id="profile-view-name" style="margin: 15px 0 0; font-size: 1.5em;"></h2>
+                </div>
+                <section>
+                   <h2 class="section-title" data-lang-key="settings"></h2>
+                   <div style="display: flex; flex-direction: column; gap: 15px;">
+                       <a class="settings-item logout" id="logout-btn"><i data-lucide="log-out"></i><span data-lang-key="logout"></span></a>
+                   </div>
+                </section>
+            </div>
+        </main>
+        <nav class="bottom-nav">
+            <a class="nav-item active" data-view="home"><i data-lucide="layout-dashboard"></i><span data-lang-key="navDashboard"></span></a>
+            <a class="nav-item" data-view="pay"><i data-lucide="dollar-sign"></i><span data-lang-key="navPay"></span></a>
+            <a class="nav-item" data-view="refinance"><i data-lucide="trending-up"></i><span data-lang-key="navRefinance"></span></a>
+            <a class="nav-item" data-view="profile"><i data-lucide="user-circle"></i><span data-lang-key="navProfile"></span></a>
+        </nav>
+    </div>
+
+    <div id="cropperModal" class="modal-view"></div>
+    <div id="toast-container"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
+            authDomain: "lumix-financas-app.firebaseapp.com",
+            projectId: "lumix-financas-app",
+            storageBucket: "lumix-financas-app.appspot.com",
+            messagingSenderId: "463777495321",
+            appId: "1:463777495321:web:106118f53f56abd206ed88"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const CLOUDINARY_CLOUD_NAME = "dc6as14p0";
+        const CLOUDINARY_UPLOAD_PRESET = "lumix-financas-uploads";
+        const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+        const DEFAULT_LOGO_URL = "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png";
+        
+        let currentClient = null;
+        let unsubscribeClient = null;
+        let currentLang = localStorage.getItem('language') || 'pt';
+        const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
+        let receiptFile = null;
+
+        const PIX_KEY_FIXED = "000.000.000-00"; // Substitua pela sua chave PIX
+        const PIX_KEY_MANUAL = "chave-manual@email.com"; // Substitua pela sua chave PIX
+
+        const translations = {
+            pt: {
+                welcome: 'Bem-vindo!', welcomeMsg: 'Acesse sua conta para ver os detalhes do seu empréstimo.', username: 'Usuário', password: 'Senha', loginBtn: 'Entrar',
+                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Lumix Finanças - Cliente', greeting: 'Olá', loanProgress: 'Progresso do Empréstimo',
+                totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Histórico de Pagamentos', noPayments: 'Nenhum pagamento registrado ainda.',
+                profile: 'Meu Perfil', settings: 'Configurações', logout: 'Sair da Conta', cropImage: 'Recortar Imagem', confirmCrop: 'Confirmar', cancel: 'Cancelar',
+                invalidCredentials: 'Usuário ou senha inválidos.', genericError: 'Ocorreu um erro.', accountNotFound: 'Sua conta não foi encontrada.', dataLoadError: 'Erro ao carregar seus dados.',
+                picUpdateSuccess: 'Foto de perfil atualizada!', picUpdateError: 'Falha ao atualizar a foto.',
+                reputationScore: 'Pontuação de Reputação', reputationPerfect: 'Excelente', reputationGood: 'Bom', reputationRegular: 'Regular', reputationBad: 'Ruim',
+                reputationInfo: 'Mantenha seus pagamentos em dia para uma boa reputação. Isso aumenta suas chances de renovar ou ampliar seu crédito no futuro.',
+                payInstallment: 'Pagar Parcela', qrCodePayment: 'Pagamento com QR Code', copyCode: 'Copiar Código', manualPayment: 'Pagamento Manual (Outros Valores)',
+                manualPixKey: 'Chave PIX Manual', uploadReceipt: 'Anexar Comprovante', submitForVerification: 'Enviar para Verificação', receiptSent: 'Comprovante enviado! Aguardando verificação.',
+                uploadError: 'Erro ao enviar comprovante.', awaitingVerification: 'Verificando', approved: 'Aprovado', copied: 'Copiado!',
+                paymentAmountLabel: 'Valor Pago', invalidAmount: 'Por favor, insira um valor de pagamento válido.',
+                installmentValue: 'Valor da Parcela', navRefinance: 'Refinanciar', refinanceTitle: 'Refinanciamento & Crédito',
+                postponeInstallment: 'Adiar Parcela', requestNewFinancing: 'Solicitar Novo Financiamento',
+                reputationNotGoodTitle: 'Opção Indisponível',
+                reputationNotGoodMsg: 'Sua pontuação de reputação precisa ser "Excelente" para solicitar novos créditos. Continue pagando em dia!',
+                newAmount: 'Novo Valor Desejado', newInstallments: 'Nº de Parcelas', sendForAnalysis: 'Enviar para Análise',
+                analysisSent: 'Solicitação enviada! Aguarde o contato do seu cobrador.'
+            },
+            es: {
+                welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
+                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Lumix Finanzas - Cliente', greeting: 'Hola', loanProgress: 'Progreso del Préstamo',
+                totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Historial de Pagos', noPayments: 'Aún no hay pagos registrados.',
+                profile: 'Mi Perfil', settings: 'Ajustes', logout: 'Cerrar Sesión', cropImage: 'Recortar Imagen', confirmCrop: 'Confirmar', cancel: 'Cancelar',
+                invalidCredentials: 'Usuario o contraseña inválidos.', genericError: 'Ocurrió un error.', accountNotFound: 'No se encontró tu cuenta.', dataLoadError: 'Error al cargar tus datos.',
+                picUpdateSuccess: '¡Foto de perfil actualizada!', picUpdateError: 'Error al actualizar la foto.',
+                reputationScore: 'Puntuación de Reputación', reputationPerfect: 'Excelente', reputationGood: 'Bueno', reputationRegular: 'Regular', reputationBad: 'Mala',
+                reputationInfo: 'Mantén tus pagos al día para tener una buena reputación. Esto aumenta tus oportunidades de renovar o ampliar tu crédito en el futuro.',
+                payInstallment: 'Pagar Cuota', qrCodePayment: 'Pago con Código QR', copyCode: 'Copiar Código', manualPayment: 'Pago Manual (Otros Valores)',
+                manualPixKey: 'Clave PIX Manual', uploadReceipt: 'Adjuntar Comprobante', submitForVerification: 'Enviar para Verificación', receiptSent: '¡Comprobante enviado! Esperando verificación.',
+                uploadError: 'Error al enviar el comprobante.', awaitingVerification: 'Verificando', approved: 'Aprobado', copied: '¡Copiado!',
+                paymentAmountLabel: 'Monto Pagado', invalidAmount: 'Por favor, ingrese un monto de pago válido.',
+                installmentValue: 'Valor de la Cuota', navRefinance: 'Refinanciar', refinanceTitle: 'Refinanciación y Crédito',
+                postponeInstallment: 'Aplazar Cuota', requestNewFinancing: 'Solicitar Nueva Financiación',
+                reputationNotGoodTitle: 'Opción No Disponible',
+                reputationNotGoodMsg: 'Tu puntuación de reputación debe ser "Excelente" para solicitar nuevos créditos. ¡Sigue pagando al día!',
+                newAmount: 'Nuevo Monto Deseado', newInstallments: 'Nº de Cuotas', sendForAnalysis: 'Enviar para Análisis',
+                analysisSent: '¡Solicitud enviada! Espere el contacto de su cobrador.'
+            },
+            en: {
+                welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
+                navDashboard: 'Dashboard', navPay: 'Pay', navProfile: 'Profile', appTitle: 'Lumix Finance - Client', greeting: 'Hello', loanProgress: 'Loan Progress',
+                totalValue: 'Total Amount', remainingValue: 'Remaining Amount', paymentHistory: 'Payment History', noPayments: 'No payments registered yet.',
+                profile: 'My Profile', settings: 'Settings', logout: 'Log Out', cropImage: 'Crop Image', confirmCrop: 'Confirm', cancel: 'Cancel',
+                invalidCredentials: 'Invalid username or password.', genericError: 'An error occurred.', accountNotFound: 'Your account was not found.', dataLoadError: 'Error loading your data.',
+                picUpdateSuccess: 'Profile picture updated!', picUpdateError: 'Failed to update picture.',
+                reputationScore: 'Reputation Score', reputationPerfect: 'Excellent', reputationGood: 'Good', reputationRegular: 'Regular', reputationBad: 'Bad',
+                reputationInfo: 'Keep your payments up to date for a good reputation. This increases your chances of renewing or extending your credit in the future.',
+                payInstallment: 'Pay Installment', qrCodePayment: 'QR Code Payment', copyCode: 'Copy Code', manualPayment: 'Manual Payment (Other Amounts)',
+                manualPixKey: 'Manual PIX Key', uploadReceipt: 'Attach Receipt', submitForVerification: 'Submit for Verification', receiptSent: 'Receipt sent! Awaiting verification.',
+                uploadError: 'Error uploading receipt.', awaitingVerification: 'Verifying', approved: 'Approved', copied: 'Copied!',
+                paymentAmountLabel: 'Amount Paid', invalidAmount: 'Please enter a valid payment amount.',
+                installmentValue: 'Installment Amount', navRefinance: 'Refinance', refinanceTitle: 'Refinancing & Credit',
+                postponeInstallment: 'Postpone Installment', requestNewFinancing: 'Request New Financing',
+                reputationNotGoodTitle: 'Option Unavailable',
+                reputationNotGoodMsg: 'Your reputation score needs to be "Excellent" to request new credit. Keep paying on time!',
+                newAmount: 'New Desired Amount', newInstallments: 'Nº of Installments', sendForAnalysis: 'Send for Analysis',
+                analysisSent: 'Request sent! Please wait for your collector to contact you.'
+            }
+        };
+
+        const money = val => (typeof val !== 'number' || isNaN(val)) ? 'R$ 0,00' : val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        
+        function showToast(message, isError = false) {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${isError ? 'toast-error' : ''}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 500);
+            }, 3500);
+        }
+
+        function applyLanguage(lang) {
+            currentLang = lang;
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.dataset.langKey;
+                if (translations[lang] && translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+            document.documentElement.lang = lang.startsWith('es') ? 'es' : (lang.startsWith('en') ? 'en' : 'pt-BR');
+            if(currentClient) {
+                 document.getElementById('greeting-text').textContent = `${translations[currentLang].greeting}, ${currentClient.name.split(' ')[0]}!`;
+            }
+        }
+
+        function applyTheme(theme) {
+            const body = document.body;
+            body.classList.toggle('dark-mode', theme === 'dark');
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) {
+                themeToggle.innerHTML = `<i data-lucide="${theme === 'dark' ? 'sun' : 'moon'}"></i>`;
+                lucide.createIcons({ nodes: [themeToggle] });
+            }
+        }
+        
+        function calculateLatePaymentDays(client) {
+            if (!client || client.paid >= client.totalLoan) return 0;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let lastRelevantDate;
+            if (client.history && client.history.length > 0) {
+                const sortedHistory = [...client.history]
+                    .filter(h => h.date?.seconds && h.status !== 'pending_verification')
+                    .sort((a, b) => b.date.seconds - a.date.seconds);
+                if (sortedHistory.length > 0) lastRelevantDate = new Date(sortedHistory[0].date.seconds * 1000);
+            } 
+            if (!lastRelevantDate) {
+                if (client.startDate?.seconds) {
+                    lastRelevantDate = new Date(client.startDate.seconds * 1000);
+                } else {
+                     return 0;
+                }
+            }
+            
+            lastRelevantDate.setHours(0, 0, 0, 0);
+
+            if (lastRelevantDate >= today) return 0;
+
+            let workingDaysToPay = 0;
+            let checkDate = new Date(lastRelevantDate);
+            while (checkDate < today) {
+                checkDate.setDate(checkDate.getDate() + 1);
+                const dayOfWeek = checkDate.getDay();
+                const formattedDate = `${String(checkDate.getDate()).padStart(2, '0')}/${String(checkDate.getMonth() + 1).padStart(2, '0')}`;
+                const isHoliday = nationalHolidays.includes(formattedDate);
+                const isPaymentDay = (client.paymentDays || []).includes(dayOfWeek);
+                if (!isHoliday && isPaymentDay) {
+                    workingDaysToPay++;
+                }
+            }
+            return workingDaysToPay > 0 ? workingDaysToPay : 0;
+        }
+
+        function updateReputationView() {
+             if (!currentClient || !document.getElementById('reputation-card')) return;
+            
+            const lateDays = calculateLatePaymentDays(currentClient);
+            const score = Math.max(0, 10 - lateDays); 
+
+            const bar = document.getElementById('reputation-bar');
+            const valueEl = document.getElementById('reputation-value');
+            const textEl = document.getElementById('reputation-text');
+
+            bar.style.width = `${score * 10}%`;
+            valueEl.textContent = `${score} / 10`;
+
+            bar.className = 'reputation-bar'; // Reset classes
+            textEl.className = 'reputation-text';
+
+            if (score === 10) {
+                bar.classList.add('status-perfect');
+                textEl.classList.add('status-perfect');
+                textEl.textContent = translations[currentLang].reputationPerfect;
+            } else if (score >= 7) {
+                bar.classList.add('status-good');
+                textEl.classList.add('status-good');
+                textEl.textContent = translations[currentLang].reputationGood;
+            } else if (score >= 3) {
+                bar.classList.add('status-regular');
+                textEl.classList.add('status-regular');
+                textEl.textContent = translations[currentLang].reputationRegular;
+            } else {
+                bar.classList.add('status-bad');
+                textEl.classList.add('status-bad');
+                textEl.textContent = translations[currentLang].reputationBad;
+            }
+        }
+
+        function updateDashboardView() {
+            if (!currentClient || !document.getElementById('home-view')) return;
+            
+            const confirmedPayments = currentClient.history?.filter(p => p.status !== 'pending_verification') || [];
+            const paidAmount = confirmedPayments.reduce((sum, p) => sum + p.amount, 0);
+            const totalAmount = currentClient.totalLoan || 0;
+            const remainingAmount = Math.max(0, totalAmount - paidAmount);
+            
+            const paidInstallments = confirmedPayments.length;
+            const totalInstallments = (currentClient.installments || "0/0").split('/').map(Number)[1] || 0;
+            const progressPercentage = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0;
+            
+            const circleCircumference = 2 * Math.PI * 54;
+            const strokeDashoffset = circleCircumference - (progressPercentage / 100) * circleCircumference;
+
+            let historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
+            if (currentClient.history && currentClient.history.length > 0) {
+                historyHtml = [...currentClient.history]
+                    .sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0))
+                    .map(p => {
+                        const dateString = p.date?.seconds ? new Date(p.date.seconds * 1000).toLocaleDateString('pt-BR') : 'Data inválida';
+                        let statusTag = '';
+                        if (p.status === 'pending_verification') {
+                            statusTag = `<span class="payment-status-tag pending">${translations[currentLang].awaitingVerification}</span>`;
+                        } else if (p.status === 'approved' || !p.status) { // Treat old payments without status as approved
+                            statusTag = `<span class="payment-status-tag approved">${translations[currentLang].approved}</span>`;
+                        }
+                        
+                        return `<div class="payment-history-item">
+                                    <span class="payment-date">${dateString}</span>
+                                    <div class="payment-status-wrapper">
+                                        <span class="payment-amount" style="color: ${p.status !== 'pending_verification' ? 'var(--accent-green)' : 'var(--text-secondary)'}">${money(p.amount)}</span>
+                                        ${statusTag}
+                                    </div>
+                                </div>`;
+                    }).join('');
+            }
+            
+            document.getElementById('progress-text').textContent = `${paidInstallments}/${totalInstallments}`;
+            document.getElementById('progress-bar').style.strokeDashoffset = strokeDashoffset;
+            document.getElementById('total-value').textContent = money(totalAmount);
+            document.getElementById('remaining-value').textContent = money(remainingAmount);
+            document.getElementById('kpi-installment-value').textContent = money(currentClient.amount || 0);
+            document.getElementById('payment-history-list').innerHTML = historyHtml;
+            
+            updateReputationView();
+
+            lucide.createIcons({nodes: document.getElementById('home-view').querySelectorAll('[data-lucide]')});
+        }
+
+        function updateProfileView() {
+            if (!currentClient || !document.getElementById('profile-view')) return;
+            const nameInitial = (currentClient.name || 'C').charAt(0).toUpperCase();
+            const placeholderUrl = `https://placehold.co/100x100/6f42c1/FFFFFF?text=${nameInitial}`;
+            
+            document.getElementById('profile-view-img').src = currentClient.profilePictureUrl || placeholderUrl;
+            document.getElementById('profile-view-name').textContent = currentClient.name;
+        }
+
+        function updatePayView() {
+            if(!currentClient || !document.getElementById('pay-view')) return;
+
+            const amount = currentClient.amount || 0;
+
+            const transactionId = "***"; 
+            const payload = `00020126580014br.gov.bcb.pix0114${PIX_KEY_FIXED}520400005303986540${amount.toFixed(2)}5802BR5913${currentClient.name.split(' ')[0]}6009SAO PAULO62070503***6304EF2E`;
+            document.getElementById('pix-copy-paste-code').value = payload;
+            document.getElementById('pix-qr-code').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
+            
+            document.getElementById('manual-pix-key-value').textContent = PIX_KEY_MANUAL;
+        }
+
+        function updateRefinanceView() {
+            if (!currentClient || !document.getElementById('refinance-view')) return;
+
+            const refinanceView = document.getElementById('refinance-view');
+            const lateDays = calculateLatePaymentDays(currentClient);
+            const score = Math.max(0, 10 - lateDays);
+            const isEligible = score === 10;
+            
+            let reputationStatusKey = 'reputationBad';
+            if (score === 10) reputationStatusKey = 'reputationPerfect';
+            else if (score >= 7) reputationStatusKey = 'reputationGood';
+            else if (score >= 3) reputationStatusKey = 'reputationRegular';
+
+            let barStatusClass = 'status-bad';
+            if (score === 10) barStatusClass = 'status-perfect';
+            else if (score >= 7) barStatusClass = 'status-good';
+            else if (score >= 3) barStatusClass = 'status-regular';
+
+            refinanceView.innerHTML = `
+                <h2 class="section-title" data-lang-key="refinanceTitle"></h2>
+                
+                <div class="kpi-card reputation-card" style="margin-bottom: 20px;">
+                   <h3 class="kpi-title" data-lang-key="reputationScore"></h3>
+                   <div class="reputation-bar-container">
+                       <div id="refinance-reputation-bar" class="reputation-bar ${barStatusClass}" style="width: ${score * 10}%"></div>
+                   </div>
+                   <div class="reputation-status">
+                       <span id="refinance-reputation-value" class="reputation-value">${score} / 10</span>
+                       <span id="refinance-reputation-text" class="reputation-text ${barStatusClass}" data-lang-key="${reputationStatusKey}"></span>
+                   </div>
+                </div>
+
+                <div class="kpi-card">
+                    ${isEligible ? `
+                        <h3 class="kpi-title" data-lang-key="requestNewFinancing"></h3>
+                        <form id="refinance-form">
+                            <div class="form-group">
+                                <label data-lang-key="newAmount"></label>
+                                <input type="number" id="ref-amount" class="form-control" step="100">
+                            </div>
+                            <div class="form-group">
+                                <label data-lang-key="newInstallments"></label>
+                                <input type="number" id="ref-installments" class="form-control">
+                            </div>
+                            <div id="ref-summary" style="margin-top: 15px;"></div>
+                            <button type="submit" class="btn-primary" style="width:100%; margin-top:15px;"><i data-lucide="send"></i> <span data-lang-key="sendForAnalysis"></span></button>
+                        </form>
+                    ` : `
+                        <h3 class="kpi-title" data-lang-key="reputationNotGoodTitle"></h3>
+                        <p style="color: var(--text-secondary); text-align: center; line-height: 1.6;">
+                            <i data-lucide="info" style="width: 40px; height: 40px; margin-bottom: 10px;"></i><br>
+                            <span data-lang-key="reputationNotGoodMsg"></span>
+                        </p>
+                    `}
+                </div>
+            `;
+
+            // Use the outer scope to apply language and icons
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.dataset.langKey;
+                if (translations[currentLang] && translations[currentLang][key]) {
+                    el.textContent = translations[currentLang][key];
+                }
+            });
+            lucide.createIcons({nodes: refinanceView.querySelectorAll('[data-lucide]')});
+
+            if (isEligible) {
+                const amountInput = document.getElementById('ref-amount');
+                const installmentsInput = document.getElementById('ref-installments');
+                const summaryDiv = document.getElementById('ref-summary');
+
+                const calculateNewLoan = () => {
+                    const amount = parseFloat(amountInput.value) || 0;
+                    const installments = parseInt(installmentsInput.value) || 0;
+                    const interestRate = currentClient.interestRate || 20; // Use client's current rate
+
+                    if (amount > 0 && installments > 0) {
+                        const totalToPay = amount * (1 + (interestRate / 100));
+                        const installmentValue = totalToPay / installments;
+                        summaryDiv.innerHTML = `
+                            <p style="margin: 5px 0;"><strong>Total a Pagar:</strong> ${money(totalToPay)}</p>
+                            <p style="margin: 5px 0;"><strong>Valor da Parcela:</strong> ${money(installmentValue)}</p>
+                        `;
+                    } else {
+                        summaryDiv.innerHTML = '';
+                    }
+                };
+
+                amountInput.addEventListener('input', calculateNewLoan);
+                installmentsInput.addEventListener('input', calculateNewLoan);
+                
+                document.getElementById('refinance-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const amount = parseFloat(amountInput.value);
+                    const installments = parseInt(installmentsInput.value);
+                    if (!amount || !installments || amount <= 0 || installments <= 0) {
+                        showToast('Por favor, preencha os valores.', true);
+                        return;
+                    }
+                    // For now, just show a toast. In the future this will update Firestore.
+                    showToast(translations[currentLang].analysisSent);
+                    amountInput.value = '';
+                    installmentsInput.value = '';
+                    summaryDiv.innerHTML = '';
+                });
+            }
+        }
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+            lucide.createIcons({nodes: [submitButton.querySelector('i')]});
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const q = query(collection(db, "clients"), where("username", "==", username), where("password", "==", password));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    showToast(translations[currentLang].invalidCredentials, true);
+                } else {
+                    const clientDoc = querySnapshot.docs[0];
+                    sessionStorage.setItem('lumixClientId', clientDoc.id);
+                    showMainApp(clientDoc.id);
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                showToast(translations[currentLang].genericError, true);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = `<span data-lang-key="loginBtn">${translations[currentLang].loginBtn}</span>`;
+            }
+        }
+        
+        function handleLogout() {
+            if (unsubscribeClient) {
+                unsubscribeClient();
+            }
+            sessionStorage.removeItem('lumixClientId');
+            currentClient = null;
+            document.getElementById('app-container').style.display = 'none';
+            document.getElementById('login-view').style.display = 'flex';
+        }
+
+        function updateAllViews() {
+            if (!currentClient) return;
+
+            const nameInitial = (currentClient.name || 'C').charAt(0).toUpperCase();
+            const placeholderUrl = `https://placehold.co/40x40/6f42c1/FFFFFF?text=${nameInitial}`;
+            document.getElementById('header-profile-img').src = currentClient.profilePictureUrl || placeholderUrl;
+            
+            updateDashboardView();
+            updateProfileView();
+            updatePayView();
+
+            if (document.getElementById('refinance-view').classList.contains('active')) {
+                updateRefinanceView();
+            }
+
+            applyLanguage(currentLang);
+            lucide.createIcons();
+        }
+
+        function showMainApp(clientId) {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('splash-screen').style.display = 'none';
+            
+            if (!document.body.dataset.listenersAttached) {
+                setupEventListeners();
+                document.body.dataset.listenersAttached = 'true';
+            }
+            
+            document.getElementById('app-container').style.display = 'flex';
+            
+            unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
+                if (docSnap.exists()) {
+                    currentClient = { id: docSnap.id, ...docSnap.data() };
+                    updateAllViews();
+                } else {
+                    showToast(translations[currentLang].accountNotFound, true);
+                    handleLogout();
+                }
+            }, (error) => {
+                console.error("Error listening to client data:", error);
+                showToast(translations[currentLang].dataLoadError, true);
+                handleLogout();
+            });
+        }
+        
+        function showCropperModal(file) {
+            const cropperModal = document.getElementById('cropperModal');
+            cropperModal.innerHTML = `
+                <header class="modal-header"><button id="closeCropperModal"><i data-lucide="x"></i></button><span class="modal-title" data-lang-key="cropImage"></span></header>
+                <div class="modal-content-wrapper"><div id="cropper-container" class="container"><img id="cropper-image"></div></div>
+                <div class="action-buttons">
+                    <button class="btn-secondary" id="cancelCropBtn"><span data-lang-key="cancel"></span></button>
+                    <button class="btn-primary" id="confirmCropBtn"><i data-lucide="check"></i> <span data-lang-key="confirmCrop"></span></button>
+                </div>`;
+            cropperModal.classList.add('active');
+            lucide.createIcons({nodes: cropperModal.querySelectorAll('[data-lucide]')});
+            applyLanguage(currentLang);
+            
+            const image = document.getElementById('cropper-image');
+            const reader = new FileReader();
+            let cropper;
+            reader.onload = e => {
+                image.src = e.target.result;
+                cropper = new Cropper(image, { aspectRatio: 1, viewMode: 1, background: false });
+            };
+            reader.readAsDataURL(file);
+
+            const closeModal = () => cropperModal.classList.remove('active');
+            document.getElementById('closeCropperModal').addEventListener('click', closeModal);
+            document.getElementById('cancelCropBtn').addEventListener('click', closeModal);
+
+            document.getElementById('confirmCropBtn').addEventListener('click', () => {
+                cropper.getCroppedCanvas({ width: 256, height: 256, imageSmoothingQuality: 'high' }).toBlob(async blob => {
+                    const profileViewImg = document.getElementById('profile-view-img');
+                    profileViewImg.classList.add('loading');
+                    closeModal();
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', blob);
+                        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                        const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+                        if (!response.ok) throw new Error('Upload failed');
+                        const data = await response.json();
+                        await updateDoc(doc(db, 'clients', currentClient.id), { profilePictureUrl: data.secure_url });
+                        showToast(translations[currentLang].picUpdateSuccess);
+                    } catch (error) {
+                        console.error("Profile picture update error:", error);
+                        showToast(translations[currentLang].picUpdateError, true);
+                    } finally {
+                        profileViewImg.classList.remove('loading');
+                    }
+                }, 'image/jpeg');
+            });
+        }
+        
+        function copyToClipboard(text, message) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed'; // Prevent scrolling to bottom of page in MS Edge.
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast(message || translations[currentLang].copied);
+                } else {
+                    showToast('Falha ao copiar.', true);
+                }
+            } catch (err) {
+                showToast('Falha ao copiar.', true);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function setupEventListeners() {
+            const appContainer = document.getElementById('app-container');
+            if(!appContainer) return;
+
+            appContainer.addEventListener('click', e => {
+                const target = e.target;
+                if (target.closest('#theme-toggle')) {
+                    const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+                    localStorage.setItem('theme', newTheme);
+                    applyTheme(newTheme);
+                }
+                const langToggle = document.getElementById('lang-toggle');
+                const langDropdown = document.getElementById('lang-dropdown');
+                if (langToggle && target.closest('#lang-toggle')) {
+                    langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
+                } else if(langDropdown) {
+                    langDropdown.style.display = 'none';
+                }
+                if (target.closest('[data-lang]')) {
+                    const newLang = target.dataset.lang;
+                    localStorage.setItem('language', newLang);
+                    applyLanguage(newLang);
+                    langDropdown.style.display = 'none';
+                }
+                const navItem = target.closest('.nav-item');
+                if (navItem) {
+                    const targetView = navItem.dataset.view;
+                    appContainer.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                    navItem.classList.add('active');
+                    appContainer.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+                    document.getElementById(`${targetView}-view`).classList.add('active');
+                    if (targetView === 'refinance') {
+                        updateRefinanceView();
+                    }
+                }
+                if(target.closest('#logout-btn')) handleLogout();
+                
+                if(target.closest('#copy-pix-code-btn')) {
+                    copyToClipboard(document.getElementById('pix-copy-paste-code').value, translations[currentLang].copied);
+                }
+                if(target.closest('#copy-manual-key-btn')) {
+                    copyToClipboard(document.getElementById('manual-pix-key-value').textContent, translations[currentLang].copied);
+                }
+                if(target.closest('#submit-receipt-btn')) {
+                    handleReceiptSubmission(target.closest('#submit-receipt-btn'));
+                }
+            });
+            appContainer.addEventListener('change', e => {
+                if (e.target.id === 'profile-pic-input' && e.target.files && e.target.files[0]) {
+                    showCropperModal(e.target.files[0]);
+                }
+                if (e.target.id === 'receipt-file-input' && e.target.files && e.target.files[0]) {
+                    receiptFile = e.target.files[0];
+                    const preview = document.getElementById('receipt-preview');
+                    const uploadLabel = document.getElementById('upload-label-text');
+                    preview.src = URL.createObjectURL(receiptFile);
+                    preview.style.display = 'block';
+                    uploadLabel.style.display = 'none';
+                    document.getElementById('submit-receipt-btn').disabled = false;
+                }
+            });
+        }
+        
+        async function handleReceiptSubmission(button) {
+             if (!receiptFile || !currentClient) return;
+             
+             const amountInput = document.getElementById('receipt-amount');
+             const amount = parseFloat(amountInput.value);
+
+             if (isNaN(amount) || amount <= 0) {
+                 showToast(translations[currentLang].invalidAmount, true);
+                 return;
+             }
+
+             const originalButtonHTML = button.innerHTML;
+             button.disabled = true;
+             button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+             lucide.createIcons({nodes: [button.querySelector('i')]});
+             
+             try {
+                const formData = new FormData();
+                formData.append('file', receiptFile);
+                formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload to Cloudinary failed: ${response.statusText} - ${errorText}`);
+                }
+                const data = await response.json();
+                
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, {
+                    history: arrayUnion({
+                        amount: amount,
+                        date: new Date(),
+                        receiptUrl: data.secure_url,
+                        status: 'pending_verification'
+                    })
+                });
+
+                showToast(translations[currentLang].receiptSent);
+                
+                // Reset form
+                receiptFile = null;
+                document.getElementById('receipt-file-input').value = '';
+                document.getElementById('receipt-preview').style.display = 'none';
+                document.getElementById('upload-label-text').style.display = 'block';
+                amountInput.value = '';
+                button.disabled = true;
+                
+                button.innerHTML = originalButtonHTML;
+                
+                // Navigate after all operations are complete
+                document.querySelector('.nav-item[data-view="home"]').click();
+
+             } catch(error) {
+                console.error("Receipt submission error:", error);
+                showToast(translations[currentLang].uploadError, true);
+                button.disabled = false;
+                button.innerHTML = originalButtonHTML;
+                lucide.createIcons({nodes: button.querySelectorAll('[data-lucide]')});
+             }
+        }
+
+        function loadGlobalSettings(settings) {
+            const companyLogo = settings.companyLogo || DEFAULT_LOGO_URL;
+            document.getElementById('splash-logo').src = companyLogo;
+            document.getElementById('login-logo').src = companyLogo;
+            const headerLogo = document.getElementById('header-logo');
+            if(headerLogo) headerLogo.src = companyLogo;
+        }
+
+        function init() {
+            const preferredTheme = localStorage.getItem('theme') || 'dark';
+            applyTheme(preferredTheme);
+            applyLanguage(currentLang);
+            
+            onSnapshot(doc(db, 'config', 'global'), (docSnap) => {
+                loadGlobalSettings(docSnap.exists() ? docSnap.data() : {});
+            });
+
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                splash.style.opacity = '0';
+                setTimeout(() => {
+                    splash.style.display = 'none';
+                    const loggedInClientId = sessionStorage.getItem('lumixClientId');
+                    if (loggedInClientId) {
+                        showMainApp(loggedInClientId);
+                    } else {
+                        document.getElementById('login-view').style.display = 'flex';
+                        document.getElementById('login-form').addEventListener('submit', handleLogin);
+                    }
+                }, 500);
+            }, 1500);
+        }
+        init();
+    </script>
+</body>
+</html>
