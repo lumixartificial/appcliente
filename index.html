@@ -7,6 +7,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="LUMIX Cliente">
     <meta name="theme-color" content="#6f42c1">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png">
     <title>Portal do Cliente</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -274,6 +276,11 @@
     </style>
 </head>
 <body>
+    <div id="install-banner" style="display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background-color: var(--accent-purple); color: white; padding: 15px 25px; border-radius: 12px; z-index: 5000; box-shadow: 0 8px 25px rgba(0,0,0,0.2); text-align: center;">
+        <p style="margin: 0 0 10px;" data-lang-key="installAppMsg">¡Instala la app para una mejor experiencia!</p>
+        <button id="install-btn" style="background-color: white; color: var(--accent-purple); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;" data-lang-key="installBtn">Instalar</button>
+    </div>
+
     <div id="splash-screen">
         <img id="splash-logo" src="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png" alt="Logo">
     </div>
@@ -429,6 +436,7 @@
         let currentClient = null;
         let unsubscribeClient = null;
         let currentLang = localStorage.getItem('language') || 'pt';
+        let deferredPrompt; // For PWA installation
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
         let receiptFile = null;
 
@@ -453,8 +461,10 @@
                 postponeInstallment: 'Adiar Parcela', requestNewFinancing: 'Solicitar Novo Financiamento',
                 reputationNotGoodTitle: 'Opção Indisponível',
                 reputationNotGoodMsg: 'Sua pontuação de reputação precisa ser "Excelente" para solicitar novos créditos. Continue pagando em dia!',
-                newAmount: 'Novo Valor Desejado', newInstallments: 'Nº de Parcelas', sendForAnalysis: 'Enviar para Análise',
-                analysisSent: 'Solicitação enviada! Aguarde o contato do seu cobrador.'
+                newAmount: 'Novo Valor Deseado', newInstallments: 'Nº de Parcelas', sendForAnalysis: 'Enviar para Análise',
+                analysisSent: 'Solicitação enviada! Aguarde o contato do seu cobrador.',
+                installAppMsg: 'Instale o app para uma melhor experiência!',
+                installBtn: 'Instalar'
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
@@ -474,7 +484,9 @@
                 reputationNotGoodTitle: 'Opción No Disponible',
                 reputationNotGoodMsg: 'Tu puntuación de reputación debe ser "Excelente" para solicitar nuevos créditos. ¡Sigue pagando al día!',
                 newAmount: 'Nuevo Monto Deseado', newInstallments: 'Nº de Cuotas', sendForAnalysis: 'Enviar para Análisis',
-                analysisSent: '¡Solicitud enviada! Espere el contacto de su cobrador.'
+                analysisSent: '¡Solicitud enviada! Espere el contacto de su cobrador.',
+                installAppMsg: '¡Instala la app para una mejor experiencia!',
+                installBtn: 'Instalar'
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
@@ -494,7 +506,9 @@
                 reputationNotGoodTitle: 'Option Unavailable',
                 reputationNotGoodMsg: 'Your reputation score needs to be "Excellent" to request new credit. Keep paying on time!',
                 newAmount: 'New Desired Amount', newInstallments: 'Nº of Installments', sendForAnalysis: 'Send for Analysis',
-                analysisSent: 'Request sent! Please wait for your collector to contact you.'
+                analysisSent: 'Request sent! Please wait for your collector to contact you.',
+                installAppMsg: 'Install the app for a better experience!',
+                installBtn: 'Install'
             }
         };
 
@@ -1081,6 +1095,63 @@
         }
 
         function init() {
+            // PWA Manifest and Service Worker Setup
+            const manifest = {
+                "name": "LUMIX Finanzas Cliente",
+                "short_name": "LUMIX Cliente",
+                "start_url": ".",
+                "display": "fullscreen",
+                "background_color": "#020617",
+                "theme_color": "#6f42c1",
+                "description": "Portal do Cliente da LUMIX Finanças.",
+                "icons": [
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png", "sizes": "192x192", "type": "image/png" },
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png", "sizes": "512x512", "type": "image/png" }
+                ]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            document.querySelector('link[rel="manifest"]').setAttribute('href', manifestURL);
+
+            if ('serviceWorker' in navigator) {
+                const swContent = `
+                    self.addEventListener('fetch', (event) => {
+                        event.respondWith(
+                            caches.match(event.request).then((response) => {
+                                return response || fetch(event.request);
+                            })
+                        );
+                    });
+                `;
+                const swBlob = new Blob([swContent], { type: 'application/javascript' });
+                const swURL = URL.createObjectURL(swBlob);
+
+                navigator.serviceWorker.register(swURL)
+                    .then(registration => console.log('Service Worker registered with scope:', registration.scope))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            }
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                const installBanner = document.getElementById('install-banner');
+                if (installBanner) installBanner.style.display = 'block';
+            });
+
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.addEventListener('click', async () => {
+                    const installBanner = document.getElementById('install-banner');
+                    if (installBanner) installBanner.style.display = 'none';
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log(`User response to the install prompt: ${outcome}`);
+                        deferredPrompt = null;
+                    }
+                });
+            }
+
             const preferredTheme = localStorage.getItem('theme') || 'dark';
             applyTheme(preferredTheme);
             applyLanguage(currentLang);
@@ -1108,3 +1179,4 @@
     </script>
 </body>
 </html>
+
