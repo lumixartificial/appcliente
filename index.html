@@ -84,7 +84,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: var(--app-height, 100dvh);
+            height: var(--app-height, 100vh);
             padding: 20px;
             background-color: var(--bg);
         }
@@ -156,7 +156,7 @@
         #app-container { 
             display: none;
             flex-direction: column;
-            height: var(--app-height, 100dvh);
+            height: var(--app-height, 100vh);
             width: 100%;
         }
         main {
@@ -1094,6 +1094,15 @@
         }
 
         function init() {
+            // ---> START OF THE DEFINITIVE FIX <---
+            const setAppHeight = () => {
+                document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+            };
+            window.addEventListener('resize', setAppHeight);
+            window.addEventListener('orientationchange', setAppHeight);
+            setAppHeight();
+            // ---> END OF THE DEFINITIVE FIX <---
+
             // PWA Manifest and Service Worker Setup
             const manifest = {
                 "name": "LUMIX Finanzas Cliente",
@@ -1178,4 +1187,3 @@
     </script>
 </body>
 </html>
-
