@@ -65,25 +65,6 @@
           }
         }
 
-        #splash-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--bg);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-            transition: opacity 0.5s ease-out;
-        }
-        #splash-screen img {
-            width: 150px; 
-            height: 150px; 
-            animation: pulse 2.5s infinite ease-in-out;
-        }
-
         #login-view {
             display: none;
             flex-direction: column;
@@ -294,10 +275,6 @@
     <div id="install-banner" style="display: none; position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background-color: var(--accent-purple); color: white; padding: 15px 25px; border-radius: 12px; z-index: 5000; box-shadow: 0 8px 25px rgba(0,0,0,0.2); text-align: center;">
         <p style="margin: 0 0 10px;" data-lang-key="installAppMsg">¡Instala la app para una mejor experiencia!</p>
         <button id="install-btn" style="background-color: white; color: var(--accent-purple); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;" data-lang-key="installBtn">Instalar</button>
-    </div>
-
-    <div id="splash-screen">
-        <img id="splash-logo" src="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png" alt="Logo">
     </div>
 
     <div id="login-view">
@@ -882,7 +859,6 @@
 
         function showMainApp(clientId) {
             document.getElementById('login-view').style.display = 'none';
-            document.getElementById('splash-screen').style.display = 'none';
             
             if (!document.body.dataset.listenersAttached) {
                 setupEventListeners();
@@ -1066,44 +1042,40 @@
                     throw new Error(`Upload to Cloudinary failed: ${response.statusText} - ${errorText}`);
                 }
                 const data = await response.json();
-                
-                const clientRef = doc(db, 'clients', currentClient.id);
-                await updateDoc(clientRef, {
-                    history: arrayUnion({
-                        amount: amount,
-                        date: new Date(),
-                        receiptUrl: data.secure_url,
-                        status: 'pending_verification'
-                    })
-                });
+                const newPayment = {
+                    amount: amount,
+                    date: serverTimestamp(),
+                    receiptUrl: data.secure_url,
+                    status: 'pending_verification'
+                };
 
+                await updateDoc(doc(db, 'clients', currentClient.id), {
+                    history: arrayUnion(newPayment)
+                });
+                
                 showToast(translations[currentLang].receiptSent);
                 
                 // Reset form
                 receiptFile = null;
-                document.getElementById('receipt-file-input').value = '';
-                document.getElementById('receipt-preview').style.display = 'none';
-                document.getElementById('upload-label-text').style.display = 'block';
                 amountInput.value = '';
-                button.disabled = true;
-                
-                button.innerHTML = originalButtonHTML;
-                
-                // Navigate after all operations are complete
-                document.querySelector('.nav-item[data-view="home"]').click();
+                const preview = document.getElementById('receipt-preview');
+                const uploadLabel = document.getElementById('upload-label-text');
+                preview.style.display = 'none';
+                preview.src = '';
+                uploadLabel.style.display = 'block';
+                document.getElementById('receipt-file-input').value = '';
 
-             } catch(error) {
-                console.error("Receipt submission error:", error);
-                showToast(translations[currentLang].uploadError, true);
-                button.disabled = false;
-                button.innerHTML = originalButtonHTML;
-                lucide.createIcons({nodes: button.querySelectorAll('[data-lucide]')});
+             } catch (error) {
+                 console.error("Receipt submission error:", error);
+                 showToast(translations[currentLang].uploadError, true);
+             } finally {
+                 button.disabled = false;
+                 button.innerHTML = originalButtonHTML;
              }
         }
 
         function loadGlobalSettings(settings) {
             const companyLogo = settings.companyLogo || DEFAULT_LOGO_URL;
-            document.getElementById('splash-logo').src = companyLogo;
             document.getElementById('login-logo').src = companyLogo;
             const headerLogo = document.getElementById('header-logo');
             if(headerLogo) headerLogo.src = companyLogo;
@@ -1175,25 +1147,19 @@
                 loadGlobalSettings(docSnap.exists() ? docSnap.data() : {});
             });
 
-            setTimeout(() => {
-                const splash = document.getElementById('splash-screen');
-                splash.style.opacity = '0';
-                setTimeout(() => {
-                    splash.style.display = 'none';
-                    const loggedInClientId = sessionStorage.getItem('lumixClientId');
-                    if (loggedInClientId) {
-                        showMainApp(loggedInClientId);
-                    } else {
-                        document.getElementById('login-view').style.display = 'flex';
-                        document.getElementById('login-form').addEventListener('submit', handleLogin);
-                    }
-                }, 500);
-            }, 1500);
+            const loggedInClientId = sessionStorage.getItem('lumixClientId');
+            if (loggedInClientId) {
+                showMainApp(loggedInClientId);
+            } else {
+                document.getElementById('login-view').style.display = 'flex';
+                document.getElementById('login-form').addEventListener('submit', handleLogin);
+            }
         }
         init();
     </script>
 </body>
 </html>
+
 
 
 
