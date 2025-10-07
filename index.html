@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="LUMIX Cliente">
     <meta name="theme-color" content="#6f42c1">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png">
+    <link rel="apple-touch-icon" href="https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png">
     <title>Portal do Cliente</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -461,7 +461,7 @@
         const translations = {
             pt: {
                 welcome: 'Bem-vindo!', welcomeMsg: 'Acesse sua conta para ver os detalhes do seu empréstimo.', username: 'Usuário', password: 'Senha', loginBtn: 'Entrar',
-                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Lumix Finanças - Cliente', greeting: 'Olá', loanProgress: 'Progresso do Empréstimo',
+                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Portal do Cliente', greeting: 'Olá', loanProgress: 'Progresso do Empréstimo',
                 totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Histórico de Pagamentos', noPayments: 'Nenhum pagamento registrado ainda.',
                 profile: 'Meu Perfil', settings: 'Configurações', logout: 'Sair da Conta', cropImage: 'Recortar Imagem', confirmCrop: 'Confirmar', cancel: 'Cancelar',
                 invalidCredentials: 'Usuário ou senha inválidos.', genericError: 'Ocorreu um erro.', accountNotFound: 'Sua conta não foi encontrada.', dataLoadError: 'Erro ao carregar seus dados.',
@@ -483,7 +483,7 @@
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
-                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Lumix Finanzas - Cliente', greeting: 'Hola', loanProgress: 'Progreso del Préstamo',
+                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Portal Cliente', greeting: 'Hola', loanProgress: 'Progreso del Préstamo',
                 totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Historial de Pagos', noPayments: 'Aún no hay pagos registrados.',
                 profile: 'Mi Perfil', settings: 'Ajustes', logout: 'Cerrar Sesión', cropImage: 'Recortar Imagen', confirmCrop: 'Confirmar', cancel: 'Cancelar',
                 invalidCredentials: 'Usuario o contraseña inválidos.', genericError: 'Ocurrió un error.', accountNotFound: 'No se encontró tu cuenta.', dataLoadError: 'Error al cargar tus datos.',
@@ -505,7 +505,7 @@
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
-                navDashboard: 'Dashboard', navPay: 'Pay', navProfile: 'Profile', appTitle: 'Lumix Finance - Client', greeting: 'Hello', loanProgress: 'Loan Progress',
+                navDashboard: 'Dashboard', navPay: 'Pay', navProfile: 'Profile', appTitle: 'Client Portal', greeting: 'Hello', loanProgress: 'Loan Progress',
                 totalValue: 'Total Amount', remainingValue: 'Remaining Amount', paymentHistory: 'Payment History', noPayments: 'No payments registered yet.',
                 profile: 'My Profile', settings: 'Settings', logout: 'Log Out', cropImage: 'Crop Image', confirmCrop: 'Confirm', cancel: 'Cancel',
                 invalidCredentials: 'Invalid username or password.', genericError: 'An error occurred.', accountNotFound: 'Your account was not found.', dataLoadError: 'Error loading your data.',
@@ -1112,16 +1112,16 @@
         function init() {
             // PWA Manifest and Service Worker Setup
             const manifest = {
-                "name": "LUMIX Finanzas Cliente",
-                "short_name": "LUMIX Cliente",
+                "name": "Portal Cliente",
+                "short_name": "Portal",
                 "start_url": ".",
                 "display": "standalone",
                 "background_color": "#020617",
                 "theme_color": "#6f42c1",
                 "description": "Portal do Cliente da LUMIX Finanças.",
                 "icons": [
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png", "sizes": "192x192", "type": "image/png" },
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png", "sizes": "512x512", "type": "image/png" }
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "192x192", "type": "image/png" },
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "512x512", "type": "image/png" }
                 ]
             };
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
@@ -1194,5 +1194,6 @@
     </script>
 </body>
 </html>
+
 
 
