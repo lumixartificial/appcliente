@@ -170,6 +170,10 @@
             left: 0;
             right: 0;
             bottom: 0;
+            /* Refuerzo para asegurar que el contenedor principal también ocupe toda la altura */
+            height: 100%;
+            height: -webkit-fill-available;
+            height: 100dvh;
         }
         main {
             flex-grow: 1; 
@@ -1111,7 +1115,7 @@
                 "name": "LUMIX Finanzas Cliente",
                 "short_name": "LUMIX Cliente",
                 "start_url": ".",
-                "display": "fullscreen",
+                "display": "standalone",
                 "background_color": "#020617",
                 "theme_color": "#6f42c1",
                 "description": "Portal do Cliente da LUMIX Finanças.",
@@ -1190,4 +1194,5 @@
     </script>
 </body>
 </html>
+
 
