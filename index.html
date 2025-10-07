@@ -84,7 +84,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100%;
+            /* height property removed */
             padding: 20px;
             background-color: var(--bg);
         }
@@ -156,7 +156,7 @@
         #app-container { 
             display: none;
             flex-direction: column;
-            height: 100%;
+            /* height property removed */
             width: 100%;
         }
         main {
@@ -1094,20 +1094,23 @@
         }
 
         function init() {
-            // ---> START OF THE DEFINITIVE FIX <---
-            const setRealViewportHeight = () => {
-                const vh = window.innerHeight;
-                document.body.style.height = `${vh}px`;
-                document.getElementById('login-view').style.height = `${vh}px`;
-                document.getElementById('app-container').style.height = `${vh}px`;
+            // ---> SOLUCIÓN DEFINITIVA PARA PANTALLA COMPLETA <---
+            const applyFullScreenFix = () => {
+                const setHeight = () => {
+                    const vh = window.innerHeight;
+                    document.body.style.height = `${vh}px`;
+                    const loginView = document.getElementById('login-view');
+                    const appContainer = document.getElementById('app-container');
+                    if (loginView) loginView.style.height = `${vh}px`;
+                    if (appContainer) appContainer.style.height = `${vh}px`;
+                };
+                window.addEventListener('resize', setHeight);
+                window.addEventListener('orientationchange', setHeight);
+                setHeight();
+                setTimeout(setHeight, 150); // Additional check after render
             };
-            
-            window.addEventListener('resize', setRealViewportHeight);
-            window.addEventListener('orientationchange', setRealViewportHeight);
-            
-            setRealViewportHeight();
-            setTimeout(setRealViewportHeight, 100);
-            // ---> END OF THE DEFINITIVE FIX <---
+            applyFullScreenFix();
+            // ---> FIN DE LA SOLUCIÓN DEFINITIVA <---
 
             // PWA Manifest and Service Worker Setup
             const manifest = {
@@ -1193,3 +1196,4 @@
     </script>
 </body>
 </html>
+
