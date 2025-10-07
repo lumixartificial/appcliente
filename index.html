@@ -821,6 +821,25 @@
             }
         }
         
+        // Função centralizada para exibir uma view
+        function showView(viewName) {
+            const appContainer = document.getElementById('app-container');
+            if (!appContainer) return;
+
+            appContainer.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+            appContainer.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+
+            const targetViewEl = document.getElementById(`${viewName}-view`);
+            const targetNavItem = appContainer.querySelector(`.nav-item[data-view="${viewName}"]`);
+
+            if (targetViewEl) targetViewEl.classList.add('active');
+            if (targetNavItem) targetNavItem.classList.add('active');
+
+            if (viewName === 'refinance') {
+                updateRefinanceView();
+            }
+        }
+
         async function handleLogin(event) {
             event.preventDefault();
             const submitButton = event.target.querySelector('button[type="submit"]');
@@ -840,6 +859,7 @@
                 } else {
                     const clientDoc = querySnapshot.docs[0];
                     sessionStorage.setItem('lumixClientId', clientDoc.id);
+                    location.hash = 'home'; // Define a view inicial no login
                     showMainApp(clientDoc.id);
                 }
             } catch (error) {
@@ -859,6 +879,7 @@
             currentClient = null;
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
+            history.replaceState(null, '', window.location.pathname); // Limpa o hash
         }
 
         function updateAllViews() {
@@ -891,6 +912,9 @@
             
             document.getElementById('app-container').style.display = 'flex';
             
+            // Exibe a view correta com base no hash inicial
+            showView(location.hash.substring(1) || 'home');
+
             unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
                 if (docSnap.exists()) {
                     currentClient = { id: docSnap.id, ...docSnap.data() };
@@ -1004,13 +1028,8 @@
                 const navItem = target.closest('.nav-item');
                 if (navItem) {
                     const targetView = navItem.dataset.view;
-                    appContainer.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-                    navItem.classList.add('active');
-                    appContainer.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-                    document.getElementById(`${targetView}-view`).classList.add('active');
-                    if (targetView === 'refinance') {
-                        updateRefinanceView();
-                    }
+                    // Altera o hash para navegar, o que aciona o 'popstate'
+                    location.hash = targetView;
                 }
                 if(target.closest('#logout-btn')) handleLogout();
                 
@@ -1146,6 +1165,15 @@
                     .catch(error => console.log('Service Worker registration failed:', error));
             }
 
+            // Adiciona o listener para o botão "voltar"
+            window.addEventListener('popstate', () => {
+                // Apenas navega se o usuário estiver logado
+                if (currentClient) {
+                    const viewName = location.hash.substring(1) || 'home';
+                    showView(viewName);
+                }
+            });
+
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
@@ -1194,8 +1222,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
