@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="LUMIX Cliente">
@@ -224,10 +224,10 @@
         .payment-status-tag.pending { background-color: rgba(250, 204, 21, 0.15); color: #856404; }
         .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.1); color: var(--accent-green); }
         body.dark-mode .payment-status-tag.pending { background-color: rgba(253, 224, 71, 0.1); color: var(--accent-yellow); }
-        body.dark-mode .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
+        .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
         .no-history { color: var(--text-secondary); text-align: center; padding: 20px; }
 
-        .bottom-nav { position: static; flex-shrink: 0; background-color: var(--surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05); transition: background-color 0.3s, border-color 0.3s; z-index: 150; }
+        .bottom-nav { position: static; flex-shrink: 0; background-color: var(--surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05); transition: background-color 0.3s, border-color 0.3s; z-index: 150; }
         body.dark-mode .bottom-nav { box-shadow: none; }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-secondary); text-decoration: none; font-size: 0.8em; padding: 5px 15px; cursor: pointer; }
         .nav-item.active { color: var(--accent-purple); }
@@ -250,7 +250,7 @@
         .modal-header button { background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0; margin-right: 15px; }
         .modal-title { font-size: 1.2em; font-weight: 600; }
         .modal-content-wrapper { flex-grow: 1; overflow-y: auto; }
-        .action-buttons { background-color: var(--surface); border-top: 1px solid var(--border-color); padding: 15px 20px; display: flex; gap: 15px; margin-top: auto; position: sticky; bottom: 0; flex-shrink: 0; }
+        .action-buttons { background-color: var(--surface); border-top: 1px solid var(--border-color); padding: 15px 20px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: flex; gap: 15px; margin-top: auto; position: sticky; bottom: 0; flex-shrink: 0; }
         .action-buttons button { flex-grow: 1; padding: 15px; font-size: 1em; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
         .btn-primary { background-color: var(--accent-purple); color: white; }
         .btn-secondary { background-color: var(--bg); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -1179,4 +1179,5 @@
     </script>
 </body>
 </html>
+
 
