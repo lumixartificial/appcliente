@@ -84,7 +84,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: var(--app-height, 100vh);
+            height: 100%;
             padding: 20px;
             background-color: var(--bg);
         }
@@ -156,7 +156,7 @@
         #app-container { 
             display: none;
             flex-direction: column;
-            height: var(--app-height, 100vh);
+            height: 100%;
             width: 100%;
         }
         main {
@@ -1095,12 +1095,18 @@
 
         function init() {
             // ---> START OF THE DEFINITIVE FIX <---
-            const setAppHeight = () => {
-                document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+            const setRealViewportHeight = () => {
+                const vh = window.innerHeight;
+                document.body.style.height = `${vh}px`;
+                document.getElementById('login-view').style.height = `${vh}px`;
+                document.getElementById('app-container').style.height = `${vh}px`;
             };
-            window.addEventListener('resize', setAppHeight);
-            window.addEventListener('orientationchange', setAppHeight);
-            setAppHeight();
+            
+            window.addEventListener('resize', setRealViewportHeight);
+            window.addEventListener('orientationchange', setRealViewportHeight);
+            
+            setRealViewportHeight();
+            setTimeout(setRealViewportHeight, 100);
             // ---> END OF THE DEFINITIVE FIX <---
 
             // PWA Manifest and Service Worker Setup
