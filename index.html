@@ -189,21 +189,21 @@
         .header-controls { display: flex; align-items: center; gap: 10px; }
         .header-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; }
         .lang-dropdown { display: none; position: absolute; top: 40px; right: 0; background-color: var(--surface); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border: 1px solid var(--border-color); overflow: hidden; z-index: 110; }
-        .lang-dropdown button { display: block; width: 100%; text-align: left; padding: 10px 15px; background: none; border: none; color: var(--text-primary); cursor: pointer; }
-        .profile { display: flex; align-items: center; gap: 10px; text-align: right; }
-        .profile-info { font-weight: 500; font-size: 0.9em; display: none; } /* Hide by default on smaller screens */
-        @media (min-width: 420px) { .profile-info { display: block; } } /* Show on slightly larger screens */
-        .profile img { height: 40px; width: 40px; border-radius: 50%; border: 2px solid var(--accent-purple); object-fit: cover; }
-
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .section-title { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; color: var(--text-primary); }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr; /* Alterado para empilhar verticalmente */
+            gap: 15px;
+            margin-bottom: 25px;
+        }
         .kpi-card { background-color: var(--surface); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
         body.dark-mode .kpi-card { box-shadow: none; }
         .kpi-title { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-secondary); margin: 0 0 10px; }
         .kpi-value {
-            font-size: clamp(1.5rem, 5vw, 1.8rem); /* Fonte responsiva para caber em telas menores */
+            font-size: 1.6rem; /* Tamanho reduzido para melhor ajuste */
             font-weight: 700;
             margin: 0;
-            word-break: break-all; /* Garante que números muito longos não transbordem */
+            white-space: nowrap; /* Impede a quebra de linha nos valores */
         }
         .kpi-value.green { color: var(--accent-green); }
         .kpi-value.purple { color: var(--accent-purple); }
