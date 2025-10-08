@@ -373,7 +373,6 @@
                 </div>
                 <button class="header-btn" id="theme-toggle"><i data-lucide="moon"></i></button>
                 <div class="profile" id="header-profile-link" style="cursor: pointer;">
-                    <span class="profile-info" id="greeting-text"></span>
                     <img id="header-profile-img" src="" alt="Foto do Cliente">
                 </div>
             </div>
@@ -634,9 +633,6 @@
                 }
             });
             document.documentElement.lang = lang.startsWith('es') ? 'es' : (lang.startsWith('en') ? 'en' : 'pt-BR');
-            if(currentClient) {
-                 document.getElementById('greeting-text').textContent = `${translations[currentLang].greeting}, ${currentClient.name.split(' ')[0]}!`;
-            }
         }
 
         function applyTheme(theme) {
