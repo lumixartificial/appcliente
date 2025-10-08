@@ -350,7 +350,7 @@
                     <div class="lang-dropdown" id="lang-dropdown" style="display: none;"><button data-lang="pt">Português</button><button data-lang="es">Español</button><button data-lang="en">English</button></div>
                 </div>
                 <button class="header-btn" id="theme-toggle"><i data-lucide="moon"></i></button>
-                <div class="profile">
+                <div class="profile" id="header-profile-link" style="cursor: pointer;">
                     <span class="profile-info" id="greeting-text"></span>
                     <img id="header-profile-img" src="" alt="Foto do Cliente">
                 </div>
@@ -448,7 +448,6 @@
             <a class="nav-item" data-view="pay"><i data-lucide="dollar-sign"></i><span data-lang-key="navPay"></span></a>
             <a class="nav-item" data-view="refinance"><i data-lucide="trending-up"></i><span data-lang-key="navRefinance"></span></a>
             <a class="nav-item" data-view="notifications"><i data-lucide="bell"></i><span data-lang-key="navNotifications"></span><span class="notification-badge" style="display: none;"></span></a>
-            <a class="nav-item" data-view="profile"><i data-lucide="user-circle"></i><span data-lang-key="navProfile"></span></a>
         </nav>
     </div>
 
@@ -1230,6 +1229,9 @@
                     const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
                     localStorage.setItem('theme', newTheme);
                     applyTheme(newTheme);
+                }
+                if (target.closest('#header-profile-link')) {
+                    location.hash = 'profile';
                 }
                 const langToggle = document.getElementById('lang-toggle');
                 const langDropdown = document.getElementById('lang-dropdown');
