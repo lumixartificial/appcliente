@@ -1,4 +1,4 @@
-// Versión 4 - Forzar actualización de caché
+// Versión 5 - Forzar actualización de caché
 // Importar los scripts de Firebase necesarios
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
