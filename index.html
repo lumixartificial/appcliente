@@ -350,10 +350,6 @@
                     <div class="lang-dropdown" id="lang-dropdown" style="display: none;"><button data-lang="pt">Português</button><button data-lang="es">Español</button><button data-lang="en">English</button></div>
                 </div>
                 <button class="header-btn" id="theme-toggle"><i data-lucide="moon"></i></button>
-                <button class="header-btn" id="notifications-header-btn" style="position: relative;">
-                    <i data-lucide="bell"></i>
-                    <span class="notification-badge" style="position: absolute; top: 4px; right: 4px; display: none;"></span>
-                </button>
                 <div class="profile">
                     <span class="profile-info" id="greeting-text"></span>
                     <img id="header-profile-img" src="" alt="Foto do Cliente">
@@ -422,7 +418,13 @@
             </div>
             <div id="refinance-view" class="view container"></div>
             <div id="notifications-view" class="view container">
-                <h2 class="section-title" data-lang-key="notificationsTitle"></h2>
+                <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span data-lang-key="notificationsTitle"></span>
+                    <button id="clear-notifications-btn" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size: 0.8em; font-weight: 500; display:flex; align-items:center; gap: 4px;">
+                        <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+                        <span data-lang-key="clearNotifications"></span>
+                    </button>
+                </div>
                 <div id="notifications-list" class="notifications-list"></div>
             </div>
             <div id="profile-view" class="view container">
@@ -477,6 +479,7 @@
         
         let currentClient = null;
         let unsubscribeClient = null;
+        let notificationInterval = null; // Adicionado para controlar o verificador de notificações
         let currentLang = localStorage.getItem('language') || 'pt';
         let deferredPrompt; // For PWA installation
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
@@ -511,7 +514,13 @@
                 navNotifications: 'Notificações', 
                 notificationsTitle: 'Minhas Notificações', 
                 noNotifications: 'Nenhuma notificação ainda.',
-                notificationRead: 'Notificação marcada como lida.'
+                notificationRead: 'Notificação marcada como lida.',
+                clearNotifications: 'Limpar Todas',
+                notificationsCleared: 'Notificações limpas.',
+                latePaymentReminderTitle: 'Lembrete de Pagamento',
+                latePaymentReminderBody: 'Notamos um atraso em seu pagamento. Para evitar taxas adicionais, por favor, regularize sua situação o mais breve possível.',
+                urgentWarningTitle: 'AVISO URGENTE: Pagamentos Atrasados',
+                urgentWarningBody: 'Você tem {count} parcelas atrasadas. É crucial que você regularize sua dívida para manter sua reputação de crédito.'
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
@@ -537,7 +546,13 @@
                 navNotifications: 'Notificaciones', 
                 notificationsTitle: 'Mis Notificaciones', 
                 noNotifications: 'Aún no hay notificaciones.',
-                notificationRead: 'Notificación marcada como leída.'
+                notificationRead: 'Notificación marcada como leída.',
+                clearNotifications: 'Limpiar Todas',
+                notificationsCleared: 'Notificaciones eliminadas.',
+                latePaymentReminderTitle: 'Recordatorio de Pago',
+                latePaymentReminderBody: 'Hemos notado un atraso en su pago. Para evitar cargos adicionales, por favor regularice su situación lo antes posible.',
+                urgentWarningTitle: 'AVISO URGENTE: Pagos Atrasados',
+                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda para mantener su reputación crediticia.'
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
@@ -563,7 +578,13 @@
                 navNotifications: 'Notifications', 
                 notificationsTitle: 'My Notifications', 
                 noNotifications: 'No notifications yet.',
-                notificationRead: 'Notification marked as read.'
+                notificationRead: 'Notification marked as read.',
+                clearNotifications: 'Clear All',
+                notificationsCleared: 'Notifications cleared.',
+                latePaymentReminderTitle: 'Payment Reminder',
+                latePaymentReminderBody: 'We have noticed a delay in your payment. To avoid additional fees, please regularize your situation as soon as possible.',
+                urgentWarningTitle: 'URGENT NOTICE: Overdue Payments',
+                urgentWarningBody: 'You have {count} overdue installments. It is crucial to settle your debt to maintain your credit reputation.'
             }
         };
 
@@ -902,6 +923,58 @@
             });
         }
 
+        async function checkAndSendLatePaymentNotifications() {
+            if (!currentClient) return;
+
+            const lateInstallments = calculateLatePaymentDays(currentClient);
+            if (lateInstallments <= 0) return; // Not late, do nothing.
+
+            const now = new Date();
+            const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+
+            // Firestore timestamps need to be converted to JS Dates for comparison
+            const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
+
+            if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
+                // A notification was sent within the last 12 hours, so we wait.
+                console.log("Late payment notification suppressed, sent recently.");
+                return;
+            }
+
+            // If we're here, it's time to send a new notification.
+            let notificationData;
+            if (lateInstallments === 1) {
+                notificationData = {
+                    title: translations[currentLang].latePaymentReminderTitle,
+                    body: translations[currentLang].latePaymentReminderBody,
+                    icon: 'alarm-clock',
+                    read: false,
+                    timestamp: new Date(), // CORREÇÃO: Usar new Date() em vez de serverTimestamp()
+                    id: `late_${Date.now()}`
+                };
+            } else { // 2 or more late installments
+                notificationData = {
+                    title: translations[currentLang].urgentWarningTitle,
+                    body: translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments),
+                    icon: 'alert-triangle',
+                    read: false,
+                    timestamp: new Date(), // CORREÇÃO: Usar new Date() em vez de serverTimestamp()
+                    id: `urgent_${Date.now()}`
+                };
+            }
+            
+            try {
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, {
+                    notifications: arrayUnion(notificationData),
+                    lastLateNotificationTimestamp: serverTimestamp()
+                });
+                console.log("Late payment notification sent successfully.");
+            } catch (error) {
+                console.error("Error sending late payment notification:", error);
+            }
+        }
+
         // Função centralizada para exibir uma view
         function showView(viewName) {
             const appContainer = document.getElementById('app-container');
@@ -956,6 +1029,7 @@
             if (unsubscribeClient) {
                 unsubscribeClient();
             }
+            if (notificationInterval) clearInterval(notificationInterval); // Limpa o intervalo ao sair
             sessionStorage.removeItem('lumixClientId');
             currentClient = null;
             document.getElementById('app-container').style.display = 'none';
@@ -1002,7 +1076,11 @@
                 if (docSnap.exists()) {
                     currentClient = { id: docSnap.id, ...docSnap.data() };
                     updateAllViews();
+                    // A verificação de notificações foi movida para ser executada apenas uma vez no carregamento e depois em um intervalo
                     if (isFirstLoad) {
+                        checkAndSendLatePaymentNotifications(); // Executa imediatamente
+                        // E depois a cada 12 horas para evitar chamadas excessivas
+                        notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 12 * 60 * 60 * 1000);
                         setupFCM();
                         isFirstLoad = false;
                     }
@@ -1107,6 +1185,20 @@
             });
         }
         
+        async function handleClearNotifications() {
+            if (!currentClient) return;
+            try {
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, {
+                    notifications: []
+                });
+                showToast(translations[currentLang].notificationsCleared);
+            } catch (error) {
+                console.error("Error clearing notifications:", error);
+                showToast(translations[currentLang].genericError, true);
+            }
+        }
+        
         function copyToClipboard(text, message) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
@@ -1160,8 +1252,8 @@
                 }
                 if(target.closest('#logout-btn')) handleLogout();
                 
-                if(target.closest('#notifications-header-btn')) {
-                    location.hash = 'notifications';
+                if(target.closest('#clear-notifications-btn')) {
+                    handleClearNotifications();
                 }
                 
                 if(target.closest('#copy-pix-code-btn')) {
@@ -1284,51 +1376,28 @@
                 "theme_color": "#6f42c1",
                 "description": "Portal do Cliente da LUMIX Finanças.",
                 "icons": [
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p_png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p_png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
                 ]
             };
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
             const manifestURL = URL.createObjectURL(manifestBlob);
             document.querySelector('link[rel="manifest"]').setAttribute('href', manifestURL);
 
+            // REGISTRO DEL SERVICE WORKER FÍSICO
             if ('serviceWorker' in navigator) {
-                const swContent = `
-                    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
-                    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
-
-                    const firebaseConfig = ${JSON.stringify(firebaseConfig)};
-
-                    if (!firebase.apps.length) {
-                       firebase.initializeApp(firebaseConfig);
-                    }
-                    
-                    const messaging = firebase.messaging();
-
-                    messaging.onBackgroundMessage((payload) => {
-                        console.log('[SW] Received background message ', payload);
-                        const notificationTitle = payload.notification.title;
-                        const notificationOptions = {
-                            body: payload.notification.body,
-                            icon: 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png'
-                        };
-                        self.registration.showNotification(notificationTitle, notificationOptions);
-                    });
-
-                    self.addEventListener('fetch', (event) => {
-                        event.respondWith(
-                            caches.match(event.request).then((response) => {
-                                return response || fetch(event.request);
-                            })
-                        );
-                    });
-                `;
-                const swBlob = new Blob([swContent], { type: 'application/javascript' });
-                const swURL = URL.createObjectURL(swBlob);
-
-                navigator.serviceWorker.register(swURL)
-                    .then(registration => console.log('Service Worker registered with scope:', registration.scope))
-                    .catch(error => console.log('Service Worker registration failed:', error));
+              // Los Service Workers requieren un contexto seguro (HTTPS) o ser localhost para funcionar.
+              // Esta verificación previene errores en entornos de previsualización que no son HTTPS.
+              if (location.protocol === 'https:' || location.hostname === 'localhost') {
+                navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                  .then(function(registration) {
+                    console.log('Service Worker registrado con éxito:', registration);
+                  }).catch(function(error) {
+                    console.log('Error al registrar el Service Worker:', error);
+                  });
+              } else {
+                  console.warn('Service Worker no registrado. El entorno no es seguro (HTTPS) o no es localhost.');
+              }
             }
 
             // Adiciona o listener para o botão "voltar"
