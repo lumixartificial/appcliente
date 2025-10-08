@@ -288,6 +288,22 @@
         .upload-receipt-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed var(--border-color); padding: 20px; border-radius: 12px; cursor: pointer; text-align: center; }
         #receipt-preview { max-width: 100px; max-height: 100px; margin-top: 10px; border-radius: 8px; }
         
+        .notification-badge { 
+            position: absolute; top: 12px; right: 12px; width: 10px; height: 10px; background-color: var(--danger-color); border-radius: 50%; border: 2px solid var(--surface); 
+        }
+        .bottom-nav .nav-item { position: relative; }
+        .bottom-nav .notification-badge { top: 3px; right: 10px; }
+        
+        .notifications-list { display: flex; flex-direction: column; gap: 10px; }
+        .notification-item { display: flex; gap: 15px; background-color: var(--surface); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent-purple); cursor: pointer; }
+        .notification-item.unread { background-color: color-mix(in srgb, var(--accent-purple) 8%, var(--surface)); }
+        .notification-icon { color: var(--accent-purple); flex-shrink: 0; margin-top: 3px; }
+        .notification-content { flex-grow: 1; }
+        .notification-title { font-weight: 600; margin: 0 0 5px; }
+        .notification-body { font-size: 0.9em; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+        .notification-date { font-size: 0.8em; color: var(--text-secondary); margin-top: 8px; text-align: right; }
+        .no-notifications { color: var(--text-secondary); text-align: center; padding: 20px; }
+        
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
@@ -334,6 +350,10 @@
                     <div class="lang-dropdown" id="lang-dropdown" style="display: none;"><button data-lang="pt">Português</button><button data-lang="es">Español</button><button data-lang="en">English</button></div>
                 </div>
                 <button class="header-btn" id="theme-toggle"><i data-lucide="moon"></i></button>
+                <button class="header-btn" id="notifications-header-btn" style="position: relative;">
+                    <i data-lucide="bell"></i>
+                    <span class="notification-badge" style="position: absolute; top: 4px; right: 4px; display: none;"></span>
+                </button>
                 <div class="profile">
                     <span class="profile-info" id="greeting-text"></span>
                     <img id="header-profile-img" src="" alt="Foto do Cliente">
@@ -401,6 +421,10 @@
                  </div>
             </div>
             <div id="refinance-view" class="view container"></div>
+            <div id="notifications-view" class="view container">
+                <h2 class="section-title" data-lang-key="notificationsTitle"></h2>
+                <div id="notifications-list" class="notifications-list"></div>
+            </div>
             <div id="profile-view" class="view container">
                 <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 30px;">
                    <label for="profile-pic-input" class="profile-pic-wrapper">
@@ -421,6 +445,7 @@
             <a class="nav-item active" data-view="home"><i data-lucide="layout-dashboard"></i><span data-lang-key="navDashboard"></span></a>
             <a class="nav-item" data-view="pay"><i data-lucide="dollar-sign"></i><span data-lang-key="navPay"></span></a>
             <a class="nav-item" data-view="refinance"><i data-lucide="trending-up"></i><span data-lang-key="navRefinance"></span></a>
+            <a class="nav-item" data-view="notifications"><i data-lucide="bell"></i><span data-lang-key="navNotifications"></span><span class="notification-badge" style="display: none;"></span></a>
             <a class="nav-item" data-view="profile"><i data-lucide="user-circle"></i><span data-lang-key="navProfile"></span></a>
         </nav>
     </div>
@@ -432,6 +457,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
@@ -456,8 +482,9 @@
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
         let receiptFile = null;
 
-        const PIX_KEY_FIXED = "000.000.000-00"; // Substitua pela sua chave PIX
+        const PIX_KEY_FIXED = "000.0.000-00"; // Substitua pela sua chave PIX
         const PIX_KEY_MANUAL = "chave-manual@email.com"; // Substitua pela sua chave PIX
+        const FCM_VAPID_KEY = "BAgKWBzKi_Z4eyNNgGtprgPRQhPzU2MqU1vyrHf0iQSMxy1UMkin4E3GJ7KQLtChcDJHtEx8mMYau4jtzQvtjfw"; // IMPORTANTE: Substitua pela sua VAPID key do Firebase Cloud Messaging
 
         const translations = {
             pt: {
@@ -480,7 +507,11 @@
                 newAmount: 'Novo Valor Deseado', newInstallments: 'Nº de Parcelas', sendForAnalysis: 'Enviar para Análise',
                 analysisSent: 'Solicitação enviada! Aguarde o contato do seu cobrador.',
                 installAppMsg: 'Instale o app para uma melhor experiência!',
-                installBtn: 'Instalar'
+                installBtn: 'Instalar',
+                navNotifications: 'Notificações', 
+                notificationsTitle: 'Minhas Notificações', 
+                noNotifications: 'Nenhuma notificação ainda.',
+                notificationRead: 'Notificação marcada como lida.'
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
@@ -502,7 +533,11 @@
                 newAmount: 'Nuevo Monto Deseado', newInstallments: 'Nº de Cuotas', sendForAnalysis: 'Enviar para Análisis',
                 analysisSent: '¡Solicitud enviada! Espere el contacto de su cobrador.',
                 installAppMsg: '¡Instala la app para una mejor experiencia!',
-                installBtn: 'Instalar'
+                installBtn: 'Instalar',
+                navNotifications: 'Notificaciones', 
+                notificationsTitle: 'Mis Notificaciones', 
+                noNotifications: 'Aún no hay notificaciones.',
+                notificationRead: 'Notificación marcada como leída.'
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
@@ -524,7 +559,11 @@
                 newAmount: 'New Desired Amount', newInstallments: 'Nº of Installments', sendForAnalysis: 'Send for Analysis',
                 analysisSent: 'Request sent! Please wait for your collector to contact you.',
                 installAppMsg: 'Install the app for a better experience!',
-                installBtn: 'Install'
+                installBtn: 'Install',
+                navNotifications: 'Notifications', 
+                notificationsTitle: 'My Notifications', 
+                noNotifications: 'No notifications yet.',
+                notificationRead: 'Notification marked as read.'
             }
         };
 
@@ -822,6 +861,47 @@
             }
         }
         
+        function updateNotificationsView() {
+            if (!currentClient || !document.getElementById('notifications-view')) return;
+            const listEl = document.getElementById('notifications-list');
+            const notifications = currentClient.notifications || [];
+            
+            let unreadCount = 0;
+            
+            if (notifications.length === 0) {
+                listEl.innerHTML = `<p class="no-notifications" data-lang-key="noNotifications">${translations[currentLang].noNotifications}</p>`;
+            } else {
+                listEl.innerHTML = [...notifications]
+                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
+                    .map((notif, index) => {
+                        const notifId = notif.id || `notif_${index}`;
+                        if (!notif.read) unreadCount++;
+                        const dateString = notif.timestamp?.seconds ? new Date(notif.timestamp.seconds * 1000).toLocaleString(currentLang, { dateStyle: 'short', timeStyle: 'short'}) : '';
+                        const icon = notif.icon || 'info';
+                        
+                        return `
+                        <div class="notification-item ${!notif.read ? 'unread' : ''}" data-id="${notifId}">
+                            <div class="notification-icon"><i data-lucide="${icon}"></i></div>
+                            <div class="notification-content">
+                                <h4 class="notification-title">${notif.title}</h4>
+                                <p class="notification-body">${notif.body}</p>
+                                ${dateString ? `<div class="notification-date">${dateString}</div>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('');
+                lucide.createIcons({nodes: listEl.querySelectorAll('[data-lucide]')});
+            }
+
+            const badges = document.querySelectorAll('.notification-badge');
+            badges.forEach(badge => {
+                if (unreadCount > 0) {
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
         // Função centralizada para exibir uma view
         function showView(viewName) {
             const appContainer = document.getElementById('app-container');
@@ -893,6 +973,7 @@
             updateDashboardView();
             updateProfileView();
             updatePayView();
+            updateNotificationsView();
 
             if (document.getElementById('refinance-view').classList.contains('active')) {
                 updateRefinanceView();
@@ -916,10 +997,15 @@
             // Exibe a view correta com base no hash inicial
             showView(location.hash.substring(1) || 'home');
 
+            let isFirstLoad = true;
             unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
                 if (docSnap.exists()) {
                     currentClient = { id: docSnap.id, ...docSnap.data() };
                     updateAllViews();
+                    if (isFirstLoad) {
+                        setupFCM();
+                        isFirstLoad = false;
+                    }
                 } else {
                     showToast(translations[currentLang].accountNotFound, true);
                     handleLogout();
@@ -929,6 +1015,46 @@
                 showToast(translations[currentLang].dataLoadError, true);
                 handleLogout();
             });
+        }
+        
+        async function setupFCM() {
+            try {
+                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                    console.warn("Push notifications are not fully supported in this browser.");
+                    return;
+                }
+
+                const messaging = getMessaging(app);
+                
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    console.log('Unable to get permission to notify.');
+                    return;
+                }
+
+                if (FCM_VAPID_KEY === "SUA_VAPID_KEY_AQUI") {
+                     console.warn("Firebase VAPID key is not set. Push notifications will not work.");
+                     return;
+                }
+
+                const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+                if (currentToken) {
+                    const existingTokens = currentClient.fcmTokens || [];
+                    if (!existingTokens.includes(currentToken)) {
+                        const clientRef = doc(db, 'clients', currentClient.id);
+                        await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
+                        console.log('FCM token saved.');
+                    }
+                }
+
+                onMessage(messaging, (payload) => {
+                    console.log('Message received in foreground:', payload);
+                    showToast(`${payload.notification.title}: ${payload.notification.body}`);
+                });
+
+            } catch (err) {
+                console.error('An error occurred while setting up FCM.', err);
+            }
         }
         
         function showCropperModal(file) {
@@ -1034,6 +1160,10 @@
                 }
                 if(target.closest('#logout-btn')) handleLogout();
                 
+                if(target.closest('#notifications-header-btn')) {
+                    location.hash = 'notifications';
+                }
+                
                 if(target.closest('#copy-pix-code-btn')) {
                     copyToClipboard(document.getElementById('pix-copy-paste-code').value, translations[currentLang].copied);
                 }
@@ -1042,6 +1172,20 @@
                 }
                 if(target.closest('#submit-receipt-btn')) {
                     handleReceiptSubmission(target.closest('#submit-receipt-btn'));
+                }
+
+                const notifItem = target.closest('.notification-item.unread');
+                if (notifItem && notifItem.dataset.id) {
+                    const notifId = notifItem.dataset.id;
+                    if (currentClient) {
+                        const clientRef = doc(db, 'clients', currentClient.id);
+                        const updatedNotifications = currentClient.notifications.map((n, index) => 
+                            (n.id || `notif_${index}`) === notifId ? { ...n, read: true } : n
+                        );
+                        updateDoc(clientRef, { notifications: updatedNotifications })
+                            .then(() => showToast(translations[currentLang].notificationRead))
+                            .catch(err => console.error("Error marking notification as read", err));
+                    }
                 }
             });
             appContainer.addEventListener('change', e => {
@@ -1150,6 +1294,27 @@
 
             if ('serviceWorker' in navigator) {
                 const swContent = `
+                    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
+                    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
+
+                    const firebaseConfig = ${JSON.stringify(firebaseConfig)};
+
+                    if (!firebase.apps.length) {
+                       firebase.initializeApp(firebaseConfig);
+                    }
+                    
+                    const messaging = firebase.messaging();
+
+                    messaging.onBackgroundMessage((payload) => {
+                        console.log('[SW] Received background message ', payload);
+                        const notificationTitle = payload.notification.title;
+                        const notificationOptions = {
+                            body: payload.notification.body,
+                            icon: 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png'
+                        };
+                        self.registration.showNotification(notificationTitle, notificationOptions);
+                    });
+
                     self.addEventListener('fetch', (event) => {
                         event.respondWith(
                             caches.match(event.request).then((response) => {
@@ -1223,4 +1388,3 @@
     </script>
 </body>
 </html>
-
