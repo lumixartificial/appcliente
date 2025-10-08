@@ -188,11 +188,28 @@
         .logo-text { font-size: 1.2em; font-weight: 700; color: var(--text-primary); }
         .header-controls { display: flex; align-items: center; gap: 10px; }
         .header-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; }
+        #header-profile-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+        }
+        .profile {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .profile-info {
+            font-weight: 500;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
         .lang-dropdown { display: none; position: absolute; top: 40px; right: 0; background-color: var(--surface); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border: 1px solid var(--border-color); overflow: hidden; z-index: 110; }
         .section-title { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; color: var(--text-primary); }
         .kpi-grid {
             display: grid;
-            grid-template-columns: 1fr; /* Alterado para empilhar verticalmente */
+            grid-template-columns: 1fr; /* Força uma única coluna, empilhando os itens */
             gap: 15px;
             margin-bottom: 25px;
         }
@@ -200,10 +217,10 @@
         body.dark-mode .kpi-card { box-shadow: none; }
         .kpi-title { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-secondary); margin: 0 0 10px; }
         .kpi-value {
-            font-size: 1.6rem; /* Tamanho reduzido para melhor ajuste */
+            font-size: 1.5rem; /* Tamanho do texto reduzido ainda mais */
             font-weight: 700;
             margin: 0;
-            white-space: nowrap; /* Impede a quebra de linha nos valores */
+            white-space: nowrap; /* Impede que o valor quebre a linha */
         }
         .kpi-value.green { color: var(--accent-green); }
         .kpi-value.purple { color: var(--accent-purple); }
@@ -383,7 +400,7 @@
                    <p class="reputation-info" data-lang-key="reputationInfo"></p>
                 </div>
 
-                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-top: 20px;">
+                <div class="kpi-grid" style="margin-top: 20px;">
                     <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="coins"></i><span data-lang-key="totalValue"></span></h3><p class="kpi-value" id="total-value"></p></div>
                     <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="dollar-sign"></i><span data-lang-key="remainingValue"></span></h3><p class="kpi-value purple" id="remaining-value"></p></div>
                      <div class="kpi-card"><h3 class="kpi-title"><i data-lucide="receipt"></i><span data-lang-key="installmentValue"></span></h3><p class="kpi-value purple" id="kpi-installment-value"></p></div>
