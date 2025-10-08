@@ -123,18 +123,18 @@
         .login-card p {
             margin-bottom: 40px;
             color: var(--text-secondary);
-            font-weight: 500;
         }
-        .stat-value {
-            margin: 0;
-            font-size: clamp(1.7rem, 7vw, 2.2rem); /* Fonte responsiva */
-            font-weight: 700;
-            color: var(--primary-color);
-            word-break: break-word; /* Garante que o texto não transborde */
+        .login-card .form-group {
+            text-align: left;
+            margin-bottom: 20px;
         }
-        .reputation-score {
-            font-size: 2.5em;
-            font-weight: 700;
+        .login-card .form-group label {
+             display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);
+        }
+        .login-card .form-group input { 
+            width: 100%; 
+            padding: 15px; 
+            font-size: 1em; 
             border-radius: 8px; 
             border: 1px solid #334155; 
             background-color: #1e293b; 
@@ -199,7 +199,12 @@
         .kpi-card { background-color: var(--surface); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
         body.dark-mode .kpi-card { box-shadow: none; }
         .kpi-title { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-secondary); margin: 0 0 10px; }
-        .kpi-value { font-size: 1.8em; font-weight: 700; margin: 0; }
+        .kpi-value {
+            font-size: clamp(1.5rem, 5vw, 1.8rem); /* Fonte responsiva para caber em telas menores */
+            font-weight: 700;
+            margin: 0;
+            word-break: break-all; /* Garante que números muito longos não transbordem */
+        }
         .kpi-value.green { color: var(--accent-green); }
         .kpi-value.purple { color: var(--accent-purple); }
 
