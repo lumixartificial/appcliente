@@ -882,19 +882,46 @@
                 amountInput.addEventListener('input', calculateNewLoan);
                 installmentsInput.addEventListener('input', calculateNewLoan);
                 
-                document.getElementById('refinance-form').addEventListener('submit', (e) => {
+                document.getElementById('refinance-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    const submitButton = e.currentTarget.querySelector('button[type="submit"]');
                     const amount = parseFloat(amountInput.value);
                     const installments = parseInt(installmentsInput.value);
+
                     if (!amount || !installments || amount <= 0 || installments <= 0) {
                         showToast('Por favor, preencha os valores.', true);
                         return;
                     }
-                    // For now, just show a toast. In the future this will update Firestore.
-                    showToast(translations[currentLang].analysisSent);
-                    amountInput.value = '';
-                    installmentsInput.value = '';
-                    summaryDiv.innerHTML = '';
+                    
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i> Enviando...`;
+                    lucide.createIcons({nodes: [submitButton.querySelector('i')]});
+
+                    try {
+                        const clientRef = doc(db, 'clients', currentClient.id);
+                        await updateDoc(clientRef, {
+                            refinanceRequest: {
+                                amount: amount,
+                                installments: installments,
+                                requestDate: new Date(),
+                                status: 'pending'
+                            }
+                        });
+
+                        showToast(translations[currentLang].analysisSent);
+                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`);
+                        amountInput.value = '';
+                        installmentsInput.value = '';
+                        summaryDiv.innerHTML = '';
+                    
+                    } catch (error) {
+                        console.error("Error sending refinance request:", error);
+                        showToast(translations[currentLang].genericError, true);
+                    } finally {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = `<i data-lucide="send"></i> <span data-lang-key="sendForAnalysis">${translations[currentLang].sendForAnalysis}</span>`;
+                        lucide.createIcons({nodes: [submitButton.querySelector('i')]});
+                    }
                 });
             }
         }
@@ -1315,7 +1342,27 @@
                 }
             });
         }
-        
+        async function sendNotificationToCollector(title, body) {
+            if (!currentClient || !currentClient.collectorId) return;
+            try {
+                const collectorRef = doc(db, 'collectors', currentClient.collectorId);
+                const notification = {
+                    title: title,
+                    body: body,
+                    from: currentClient.name,
+                    clientId: currentClient.id,
+                    timestamp: new Date(),
+                    read: false
+                };
+                // Esta es la acción que dispara la Cloud Function para la notificación push
+                await updateDoc(collectorRef, {
+                    notifications: arrayUnion(notification)
+                });
+                console.log("Notificación push enviada al servidor para el cobrador.");
+            } catch (error) {
+                console.error("Error al enviar la notificación al cobrador:", error);
+            }
+        }
         async function handleReceiptSubmission(button) {
              if (!receiptFile || !currentClient) return;
              
@@ -1354,7 +1401,7 @@
                 });
 
                 showToast(translations[currentLang].receiptSent);
-                
+                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`);
                 // Reset form
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
