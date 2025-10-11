@@ -540,7 +540,9 @@
                 latePaymentReminderTitle: 'Lembrete de Pagamento',
                 latePaymentReminderBody: 'Notamos um atraso em seu pagamento. Para evitar taxas adicionais, por favor, regularize sua situação o mais breve possível.',
                 urgentWarningTitle: 'AVISO URGENTE: Pagamentos Atrasados',
-                urgentWarningBody: 'Você tem {count} parcelas atrasadas. É crucial que você regularize sua dívida para manter sua reputação de crédito.'
+                urgentWarningBody: 'Você tem {count} parcelas atrasadas. É crucial que você regularize sua dívida para manter sua reputação de crédito.' ,
+                paymentSent: 'enviou um pagamento de',
+                refinanceRequested: 'solicitou um refinanciamento de',
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
@@ -572,7 +574,9 @@
                 latePaymentReminderTitle: 'Recordatorio de Pago',
                 latePaymentReminderBody: 'Hemos notado un atraso en su pago. Para evitar cargos adicionales, por favor regularice su situación lo antes posible.',
                 urgentWarningTitle: 'AVISO URGENTE: Pagos Atrasados',
-                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda para mantener su reputación crediticia.'
+                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda para mantener su reputación crediticia.' ,
+                paymentSent: 'envió un pago de',
+                refinanceRequested: 'solicitó un refinanciamiento de',
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
@@ -604,7 +608,9 @@
                 latePaymentReminderTitle: 'Payment Reminder',
                 latePaymentReminderBody: 'We have noticed a delay in your payment. To avoid additional fees, please regularize your situation as soon as possible.',
                 urgentWarningTitle: 'URGENT NOTICE: Overdue Payments',
-                urgentWarningBody: 'You have {count} overdue installments. It is crucial to settle your debt to maintain your credit reputation.'
+                urgentWarningBody: 'You have {count} overdue installments. It is crucial to settle your debt to maintain your credit reputation.',
+                paymentSent: 'sent a payment of',
+                refinanceRequested: 'requested a refinancing of',
             }
         };
 
@@ -1342,24 +1348,21 @@
                 }
             });
         }
-        async function sendNotificationToCollector(title, body, type = 'payment') { // Adicionamos um 'type'
+        async function sendNotificationToCollector(title, body, type = 'payment') {
             if (!currentClient || !currentClient.collectorId) return;
             try {
-                // NOVO MÉTODO: Cria um documento separado para cada notificação.
-                // Isso garante que a Cloud Function seja acionada de forma confiável.
+                // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
                 const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
-                
                 await addDoc(notificationsCollectionRef, {
                     title: title,
                     body: body,
                     from: currentClient.name,
                     clientId: currentClient.id,
-                    timestamp: serverTimestamp(), // Usa o timestamp do servidor
+                    timestamp: serverTimestamp(),
                     read: false,
-                    type: type, // 'payment' ou 'refinance'
+                    type: type,
                     profilePictureUrl: currentClient.profilePictureUrl || ''
                 });
-
                 console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
             } catch (error) {
                 console.error("Error al enviar el ticket de notificación al cobrador:", error);
@@ -1526,4 +1529,3 @@
     </script>
 </body>
 </html>
-
