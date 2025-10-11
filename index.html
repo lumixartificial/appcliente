@@ -909,7 +909,7 @@
                         });
 
                         showToast(translations[currentLang].analysisSent);
-                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`);
+                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
                         amountInput.value = '';
                         installmentsInput.value = '';
                         summaryDiv.innerHTML = '';
@@ -1342,25 +1342,27 @@
                 }
             });
         }
-        async function sendNotificationToCollector(title, body) {
+        async function sendNotificationToCollector(title, body, type = 'payment') { // Adicionamos um 'type'
             if (!currentClient || !currentClient.collectorId) return;
             try {
-                const collectorRef = doc(db, 'collectors', currentClient.collectorId);
-                const notification = {
+                // NOVO MÉTODO: Cria um documento separado para cada notificação.
+                // Isso garante que a Cloud Function seja acionada de forma confiável.
+                const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
+                
+                await addDoc(notificationsCollectionRef, {
                     title: title,
                     body: body,
                     from: currentClient.name,
                     clientId: currentClient.id,
-                    timestamp: new Date(),
-                    read: false
-                };
-                // Esta es la acción que dispara la Cloud Function para la notificación push
-                await updateDoc(collectorRef, {
-                    notifications: arrayUnion(notification)
+                    timestamp: serverTimestamp(), // Usa o timestamp do servidor
+                    read: false,
+                    type: type, // 'payment' ou 'refinance'
+                    profilePictureUrl: currentClient.profilePictureUrl || ''
                 });
-                console.log("Notificación push enviada al servidor para el cobrador.");
+
+                console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
             } catch (error) {
-                console.error("Error al enviar la notificación al cobrador:", error);
+                console.error("Error al enviar el ticket de notificación al cobrador:", error);
             }
         }
         async function handleReceiptSubmission(button) {
@@ -1401,7 +1403,7 @@
                 });
 
                 showToast(translations[currentLang].receiptSent);
-                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`);
+                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
                 // Reset form
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
