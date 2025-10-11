@@ -904,12 +904,18 @@
                     lucide.createIcons({nodes: [submitButton.querySelector('i')]});
 
                     try {
-                        
+                        const clientRef = doc(db, 'clients', currentClient.id);
+                        await updateDoc(clientRef, {
+                            refinanceRequest: {
+                                amount: amount,
+                                installments: installments,
+                                requestDate: new Date(),
+                                status: 'pending'
+                            }
+                        });
 
                         showToast(translations[currentLang].analysisSent);
-                        const notificationBody = `${translations[currentLang].refinanceRequested} ${money(amount)}.`;
-                        const refinanceData = { amount: amount, installments: installments };
-                        sendNotificationToCollector(currentClient.name, notificationBody, 'refinance', refinanceData);
+                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
                         amountInput.value = '';
                         installmentsInput.value = '';
                         summaryDiv.innerHTML = '';
@@ -1342,28 +1348,26 @@
                 }
             });
         }
-        // REEMPLAZA ESTA FUNCIÓN COMPLETA
-async function sendNotificationToCollector(title, body, type = 'payment', data = {}) {
-    if (!currentClient || !currentClient.collectorId) return;
-    try {
-        // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
-        const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
-        await addDoc(notificationsCollectionRef, {
-            title: title,
-            body: body,
-            from: currentClient.name,
-            clientId: currentClient.id,
-            timestamp: serverTimestamp(),
-            read: false,
-            type: type,
-            profilePictureUrl: currentClient.profilePictureUrl || '',
-            ...data // ¡Esta línea añade los datos extras como monto, recibo, etc.!
-        });
-        console.log("Ticket de notificação push enviado ao servidor para o cobrador com dados:", data);
-    } catch (error) {
-        console.error("Error al enviar el ticket de notificación al cobrador:", error);
-    }
-}
+        async function sendNotificationToCollector(title, body, type = 'payment') {
+            if (!currentClient || !currentClient.collectorId) return;
+            try {
+                // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
+                const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
+                await addDoc(notificationsCollectionRef, {
+                    title: title,
+                    body: body,
+                    from: currentClient.name,
+                    clientId: currentClient.id,
+                    timestamp: serverTimestamp(),
+                    read: false,
+                    type: type,
+                    profilePictureUrl: currentClient.profilePictureUrl || ''
+                });
+                console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
+            } catch (error) {
+                console.error("Error al enviar el ticket de notificación al cobrador:", error);
+            }
+        }
         async function handleReceiptSubmission(button) {
              if (!receiptFile || !currentClient) return;
              
@@ -1391,11 +1395,18 @@ async function sendNotificationToCollector(title, body, type = 'payment', data =
                 }
                 const data = await response.json();
                 
-                
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, {
+                    history: arrayUnion({
+                        amount: amount,
+                        date: new Date(),
+                        receiptUrl: data.secure_url,
+                        status: 'pending_verification'
+                    })
+                });
+
                 showToast(translations[currentLang].receiptSent);
-                const notificationBody = `${translations[currentLang].paymentSent} ${money(amount)}.`;
-                const paymentData = { amount: amount, receiptUrl: data.secure_url };
-                sendNotificationToCollector(currentClient.name, notificationBody, 'payment', paymentData);
+                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
                 // Reset form
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
