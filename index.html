@@ -1385,7 +1385,6 @@
              lucide.createIcons({nodes: [button.querySelector('i')]});
              
              try {
-                // Sube la imagen del recibo a Cloudinary
                 const formData = new FormData();
                 formData.append('file', receiptFile);
                 formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -1396,17 +1395,19 @@
                 }
                 const data = await response.json();
                 
-                // CORRECCIÓN: Ya no actualizamos el historial del cliente aquí.
-                // En su lugar, enviamos toda la información en el "ticket" de notificación.
-                const notificationTitle = `${currentClient.name}`;
-                const notificationBody = `${translations[currentLang].paymentSent} ${money(amount)}.`;
-                
-                // Llama a una nueva función que crea el ticket con TODOS los datos del pago
-                await createPaymentNotificationTicket(notificationTitle, notificationBody, amount, data.secure_url);
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, {
+                    history: arrayUnion({
+                        amount: amount,
+                        date: new Date(),
+                        receiptUrl: data.secure_url,
+                        status: 'pending_verification'
+                    })
+                });
 
                 showToast(translations[currentLang].receiptSent);
-                
-                // Limpia el formulario
+                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
+                // Reset form
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
                 document.getElementById('receipt-preview').style.display = 'none';
@@ -1416,8 +1417,8 @@
                 
                 button.innerHTML = originalButtonHTML;
                 
-                // Navega a la pantalla de inicio
-                location.hash = 'home';
+                // Navigate after all operations are complete
+                document.querySelector('.nav-item[data-view="home"]').click();
 
              } catch(error) {
                 console.error("Receipt submission error:", error);
@@ -1528,5 +1529,3 @@
     </script>
 </body>
 </html>
-
-
