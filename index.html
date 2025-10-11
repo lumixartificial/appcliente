@@ -1348,9 +1348,10 @@
                 }
             });
         }
-        async function createPaymentNotificationTicket(title, body, amount, receiptUrl) {
+        async function sendNotificationToCollector(title, body, type = 'payment') {
             if (!currentClient || !currentClient.collectorId) return;
             try {
+                // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
                 const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
                 await addDoc(notificationsCollectionRef, {
                     title: title,
@@ -1359,17 +1360,12 @@
                     clientId: currentClient.id,
                     timestamp: serverTimestamp(),
                     read: false,
-                    type: 'payment_verification', // Un nuevo tipo específico
-                    profilePictureUrl: currentClient.profilePictureUrl || '',
-                    // Incluimos los datos del pago para que el cobrador los use
-                    paymentData: {
-                        amount: amount,
-                        receiptUrl: receiptUrl
-                    }
+                    type: type,
+                    profilePictureUrl: currentClient.profilePictureUrl || ''
                 });
-                console.log("Ticket de verificação de pagamento enviado ao servidor.");
+                console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
             } catch (error) {
-                console.error("Error al enviar el ticket de notificación:", error);
+                console.error("Error al enviar el ticket de notificación al cobrador:", error);
             }
         }
         async function handleReceiptSubmission(button) {
