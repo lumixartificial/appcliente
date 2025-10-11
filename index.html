@@ -1348,10 +1348,9 @@
                 }
             });
         }
-        async function sendNotificationToCollector(title, body, type = 'payment') {
+        async function createPaymentNotificationTicket(title, body, amount, receiptUrl) {
             if (!currentClient || !currentClient.collectorId) return;
             try {
-                // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
                 const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
                 await addDoc(notificationsCollectionRef, {
                     title: title,
@@ -1360,12 +1359,17 @@
                     clientId: currentClient.id,
                     timestamp: serverTimestamp(),
                     read: false,
-                    type: type,
-                    profilePictureUrl: currentClient.profilePictureUrl || ''
+                    type: 'payment_verification', // Un nuevo tipo específico
+                    profilePictureUrl: currentClient.profilePictureUrl || '',
+                    // Incluimos los datos del pago para que el cobrador los use
+                    paymentData: {
+                        amount: amount,
+                        receiptUrl: receiptUrl
+                    }
                 });
-                console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
+                console.log("Ticket de verificação de pagamento enviado ao servidor.");
             } catch (error) {
-                console.error("Error al enviar el ticket de notificación al cobrador:", error);
+                console.error("Error al enviar el ticket de notificación:", error);
             }
         }
         async function handleReceiptSubmission(button) {
@@ -1385,6 +1389,7 @@
              lucide.createIcons({nodes: [button.querySelector('i')]});
              
              try {
+                // Sube la imagen del recibo a Cloudinary
                 const formData = new FormData();
                 formData.append('file', receiptFile);
                 formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -1395,19 +1400,17 @@
                 }
                 const data = await response.json();
                 
-                const clientRef = doc(db, 'clients', currentClient.id);
-                await updateDoc(clientRef, {
-                    history: arrayUnion({
-                        amount: amount,
-                        date: new Date(),
-                        receiptUrl: data.secure_url,
-                        status: 'pending_verification'
-                    })
-                });
+                // CORRECCIÓN: Ya no actualizamos el historial del cliente aquí.
+                // En su lugar, enviamos toda la información en el "ticket" de notificación.
+                const notificationTitle = `${currentClient.name}`;
+                const notificationBody = `${translations[currentLang].paymentSent} ${money(amount)}.`;
+                
+                // Llama a una nueva función que crea el ticket con TODOS los datos del pago
+                await createPaymentNotificationTicket(notificationTitle, notificationBody, amount, data.secure_url);
 
                 showToast(translations[currentLang].receiptSent);
-                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
-                // Reset form
+                
+                // Limpia el formulario
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
                 document.getElementById('receipt-preview').style.display = 'none';
@@ -1417,8 +1420,8 @@
                 
                 button.innerHTML = originalButtonHTML;
                 
-                // Navigate after all operations are complete
-                document.querySelector('.nav-item[data-view="home"]').click();
+                // Navega a la pantalla de inicio
+                location.hash = 'home';
 
              } catch(error) {
                 console.error("Receipt submission error:", error);
