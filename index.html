@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="LUMIX Cliente">
     <meta name="theme-color" content="#6f42c1">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest-cliente.json">
     <link rel="icon" href="https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png" type="image/png">
     <link rel="apple-touch-icon" href="https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png">
     <title>Portal do Cliente</title>
@@ -1439,23 +1439,6 @@
 
         function init() {
             // PWA Manifest and Service Worker Setup
-            const manifest = {
-                "name": "Portal Cliente",
-                "short_name": "Portal Cliente",
-                "start_url": ".",
-                "display": "standalone",
-                "background_color": "#020617",
-                "theme_color": "#6f42c1",
-                "description": "Portal do Cliente da LUMIX Finanças.",
-                "icons": [
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-                    { "src": "https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-                ]
-            };
-            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-            const manifestURL = URL.createObjectURL(manifestBlob);
-            document.querySelector('link[rel="manifest"]').setAttribute('href', manifestURL);
-
             // REGISTRO DEL SERVICE WORKER FÍSICO
             if ('serviceWorker' in navigator) {
               // Los Service Workers requieren un contexto seguro (HTTPS) o ser localhost para funcionar.
@@ -1529,4 +1512,5 @@
     </script>
 </body>
 </html>
+
 
