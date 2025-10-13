@@ -17,7 +17,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-const SW_VERSION = "v1.9-stable";
+const SW_VERSION = "v2.0-final";
 console.log(`Service Worker ${SW_VERSION} cargado.`);
 
 self.addEventListener('install', (event) => {
@@ -30,25 +30,35 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+messaging.onBackgroundMessage((payload) => {
+    console.log(`[SW ${SW_VERSION}] Mensaje de fondo recibido:`, payload);
+    const notificationTitle = payload.data.title;
+    const notificationOptions = {
+        body: payload.data.body,
+        icon: payload.data.icon,
+        data: { url: payload.data.url || self.location.origin }
+    };
+    return self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
 self.addEventListener('notificationclick', (event) => {
     console.log(`[SW ${SW_VERSION}] Evento 'notificationclick' DETECTADO.`);
     event.notification.close();
 
-    // Usa la URL que venga en los datos, o la del origen como fallback.
-    const targetUrl = event.notification.data.url || self.location.origin;
+    const targetUrl = event.notification.data.url;
+    if (!targetUrl) {
+        console.error(`[SW ${SW_VERSION}] No se encontró URL. Abriendo página principal.`);
+        return event.waitUntil(clients.openWindow(self.location.origin));
+    }
 
-    const promiseChain = clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true
-    }).then((windowClients) => {
+    const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((windowClients) => {
         for (const client of windowClients) {
             if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
-                console.log(`[SW ${SW_VERSION}] Se encontró una ventana abierta. Navegando y enfocando.`);
                 return client.navigate(targetUrl).then(c => c.focus());
             }
         }
         if (clients.openWindow) {
-            console.log(`[SW ${SW_VERSION}] No se encontraron ventanas. Abriendo una nueva en: ${targetUrl}`);
             return clients.openWindow(targetUrl);
         }
     });
