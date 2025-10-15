@@ -2,67 +2,75 @@
 // Importar los scripts de Firebase necesarios
 // Importamos los scripts de Firebase necesarios
 
-importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
+const SW_VERSION = "v4.0-client-diagnostico";
+const LOG_PREFIX = `[SW-CLIENTE-DIAGNOSTICO ${SW_VERSION}]`;
 
-// Configuración de Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
-    authDomain: "lumix-financas-app.firebaseapp.com",
-    projectId: "lumix-financas-app",
-    storageBucket: "lumix-financas-app.appspot.com",
-    messagingSenderId: "463777495321",
-    appId: "1:463777495321:web:106118f53f56abd206ed88"
-};
+try {
+    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
+    importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
-// Inicializa Firebase
-firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
+    const firebaseConfig = {
+        apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
+        authDomain: "lumix-financas-app.firebaseapp.com",
+        projectId: "lumix-financas-app",
+        storageBucket: "lumix-financas-app.appspot.com",
+        messagingSenderId: "463777495321",
+        appId: "1:463777495321:web:106118f53f56abd206ed88"
+    };
 
-const SW_VERSION = "v3.0-client-push";
-console.log(`Service Worker (Cliente) ${SW_VERSION} cargado.`);
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
 
-// Maneja los mensajes en segundo plano
-messaging.onBackgroundMessage((payload) => {
-  console.log(`[SW Cliente ${SW_VERSION}] Mensaje en segundo plano recibido:`, payload);
+    console.log(`${LOG_PREFIX} Service Worker cargado y Firebase inicializado.`);
 
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: payload.notification.icon || 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png',
-    tag: `lumix-cliente-notification-${payload.data.type || 'general'}`,
-    data: {
-      url: payload.fcmOptions.link || self.location.origin
-    }
-  };
+    messaging.onBackgroundMessage((payload) => {
+        console.log(`${LOG_PREFIX} >>> ¡MENSAJE PUSH EN SEGUNDO PLANO RECIBIDO! <<<`, payload);
 
-  return self.registration.showNotification(notificationTitle, notificationOptions);
-});
+        const notificationTitle = payload.notification.title;
+        const notificationOptions = {
+            body: payload.notification.body,
+            icon: payload.notification.icon || 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png',
+            tag: payload.notification.tag || 'lumix-cliente-notification',
+            data: {
+                url: payload.fcmOptions ? payload.fcmOptions.link : self.location.origin
+            }
+        };
+        console.log(`${LOG_PREFIX} Opciones de notificación preparadas:`, notificationOptions);
+
+        return self.registration.showNotification(notificationTitle, notificationOptions)
+            .then(() => console.log(`${LOG_PREFIX} ¡ÉXITO! Notificación mostrada.`))
+            .catch(err => console.error(`${LOG_PREFIX} ERROR al mostrar la notificación:`, err));
+    });
+
+} catch (error) {
+    console.error(`${LOG_PREFIX} ERROR FATAL en el script principal del Service Worker:`, error);
+}
 
 self.addEventListener('install', (event) => {
-  console.log(`[SW Cliente ${SW_VERSION}] Instalando...`);
+  console.log(`${LOG_PREFIX} Evento: 'install'. Saltando la espera.`);
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  console.log(`[SW Cliente ${SW_VERSION}] Activado y tomando control.`);
+  console.log(`${LOG_PREFIX} Evento: 'activate'. Tomando control de las páginas.`);
   event.waitUntil(self.clients.claim());
 });
 
-// Maneja el clic en la notificación
 self.addEventListener('notificationclick', (event) => {
-    console.log(`[SW Cliente ${SW_VERSION}] Clic en notificación detectado.`);
+    console.log(`${LOG_PREFIX} Evento: 'notificationclick'. El usuario hizo clic en la notificación.`);
     event.notification.close();
     const targetUrl = event.notification.data.url || self.location.origin;
-    
+
     const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then((windowClients) => {
         for (const client of windowClients) {
             if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
+                console.log(`${LOG_PREFIX} Encontrada una ventana abierta de la app. Navegando y enfocando.`);
                 return client.navigate(targetUrl).then(c => c.focus());
             }
         }
         if (clients.openWindow) {
+            console.log(`${LOG_PREFIX} No se encontraron ventanas abiertas. Abriendo una nueva en: ${targetUrl}`);
             return clients.openWindow(targetUrl);
         }
     });
