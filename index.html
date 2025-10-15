@@ -567,6 +567,14 @@
                 urgentWarningBody: 'Você tem {count} parcelas atrasadas. É crucial que você regularize sua dívida para manter sua reputação de crédito.' ,
                 paymentSent: 'enviou um pagamento de',
                 refinanceRequested: 'solicitou um refinanciamento de',
+                paymentApprovedTitle: 'Pagamento Aprovado',
+paymentApprovedBody: 'Seu pagamento de {amount} foi aprovado!',
+paymentRejectedTitle: 'Pagamento Rejeitado',
+paymentRejectedBody: 'Seu comprovante foi rejeitado. Entre em contato com seu cobrador.',
+refinanceApprovedTitle: 'Refinanciamento Aprovado!',
+refinanceApprovedBody: 'Sua solicitação de refinanciamento foi aprovada.',
+refinanceRejectedTitle: 'Refinanciamento Rejeitado',
+refinanceRejectedBody: 'Sua solicitação foi rejeitada.',
             },
             es: {
                 welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
@@ -601,6 +609,14 @@
                 urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda para mantener su reputación crediticia.' ,
                 paymentSent: 'envió un pago de',
                 refinanceRequested: 'solicitó un refinanciamiento de',
+                paymentApprovedTitle: 'Pago aprobado',
+paymentApprovedBody: '¡Su pago de {amount} fue aprobado!',
+paymentRejectedTitle: 'Pago rechazado',
+paymentRejectedBody: 'Su recibo fue rechazado. Por favor, contacte a su facturador.',
+refinanceApprovedTitle: '¡Refinanciamiento aprobado!',
+refinanceApprovedBody: 'Su solicitud de refinanciamiento fue aprobada.',
+refinanceRejectedTitle: 'Refinanciamiento rechazado',
+refinanceRejectedBody: 'Su solicitud fue rechazada.',
             },
             en: {
                 welcome: 'Welcome!', welcomeMsg: 'Log in to your account to see your loan details.', username: 'Username', password: 'Password', loginBtn: 'Login',
@@ -635,6 +651,14 @@
                 urgentWarningBody: 'You have {count} overdue installments. It is crucial to settle your debt to maintain your credit reputation.',
                 paymentSent: 'sent a payment of',
                 refinanceRequested: 'requested a refinancing of',
+                paymentApprovedTitle: 'Payment Approved',
+paymentApprovedBody: 'Your payment of {amount} was approved!',
+paymentRejectedTitle: 'Payment Rejected',
+paymentRejectedBody: 'Your receipt was rejected. Please contact your biller.',
+refinanceApprovedTitle: 'Refinance Approved!',
+refinanceApprovedBody: 'Your refinance request was approved.',
+refinanceRejectedTitle: 'Refinance Rejected',
+refinanceRejectedBody: 'Your request was rejected.',
             }
         };
 
@@ -997,57 +1021,61 @@
             });
         }
 
-        async function checkAndSendLatePaymentNotifications() {
-            if (!currentClient) return;
+        async function sendNotificationTicket(title, body, type, icon) {
+    if (!currentClient) return;
+    try {
+        const clientRef = doc(db, 'clients', currentClient.id);
+        // 1. Añade a la lista interna de notificaciones de la app
+        const internalNotif = {
+            title: title, body: body, icon: icon, read: false, timestamp: serverTimestamp(), id: `${type}_${Date.now()}`
+        };
+        await updateDoc(clientRef, {
+            notifications: arrayUnion(internalNotif),
+            lastLateNotificationTimestamp: serverTimestamp() // Reutilizamos este campo para evitar spam
+        });
 
-            const lateInstallments = calculateLatePaymentDays(currentClient);
-            if (lateInstallments <= 0) return; // Not late, do nothing.
+        // 2. Crea el ticket para la notificación PUSH
+        const ticketsCollectionRef = collection(db, 'clients', currentClient.id, 'pushNotificationTickets');
+        await addDoc(ticketsCollectionRef, {
+            title: title, body: body, type: type
+        });
 
-            const now = new Date();
-            const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+        console.log(`Notificación interna y ticket PUSH para '${type}' creados.`);
+    } catch (error) {
+        console.error(`Error enviando notificación para '${type}':`, error);
+    }
+}
 
-            // Firestore timestamps need to be converted to JS Dates for comparison
-            const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
+async function checkAndSendLatePaymentNotifications() {
+    if (!currentClient) return;
 
-            if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
-                // A notification was sent within the last 12 hours, so we wait.
-                console.log("Late payment notification suppressed, sent recently.");
-                return;
-            }
+    const lateInstallments = calculateLatePaymentDays(currentClient);
+    if (lateInstallments <= 0) return; 
 
-            // If we're here, it's time to send a new notification.
-            let notificationData;
-            if (lateInstallments === 1) {
-                notificationData = {
-                    title: translations[currentLang].latePaymentReminderTitle,
-                    body: translations[currentLang].latePaymentReminderBody,
-                    icon: 'alarm-clock',
-                    read: false,
-                    timestamp: new Date(), // CORREÇÃO: Usar new Date() em vez de serverTimestamp()
-                    id: `late_${Date.now()}`
-                };
-            } else { // 2 or more late installments
-                notificationData = {
-                    title: translations[currentLang].urgentWarningTitle,
-                    body: translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments),
-                    icon: 'alert-triangle',
-                    read: false,
-                    timestamp: new Date(), // CORREÇÃO: Usar new Date() em vez de serverTimestamp()
-                    id: `urgent_${Date.now()}`
-                };
-            }
-            
-            try {
-                const clientRef = doc(db, 'clients', currentClient.id);
-                await updateDoc(clientRef, {
-                    notifications: arrayUnion(notificationData),
-                    lastLateNotificationTimestamp: serverTimestamp()
-                });
-                console.log("Late payment notification sent successfully.");
-            } catch (error) {
-                console.error("Error sending late payment notification:", error);
-            }
-        }
+    const now = new Date();
+    const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+    const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
+
+    if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
+        console.log("Notificación de atraso suprimida, enviada recientemente.");
+        return;
+    }
+
+    let title, body, type, icon;
+    if (lateInstallments === 1) {
+        title = translations[currentLang].latePaymentReminderTitle;
+        body = translations[currentLang].latePaymentReminderBody;
+        type = 'late_reminder';
+        icon = 'alarm-clock';
+    } else { 
+        title = translations[currentLang].urgentWarningTitle;
+        body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments);
+        type = 'urgent_warning';
+        icon = 'alert-triangle';
+    }
+
+    await sendNotificationTicket(title, body, type, icon);
+}
 
         // Função centralizada para exibir uma view
         function showView(viewName) {
@@ -1131,6 +1159,46 @@
             lucide.createIcons();
         }
 
+        async function setupFCM() {
+    try {
+        if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+            console.warn("Notificaciones Push no son soportadas en este navegador.");
+            return;
+        }
+
+        const messaging = getMessaging(app);
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.log('Permiso para notificar denegado.');
+            return;
+        }
+
+        const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+        if (currentToken && currentClient) {
+            const existingTokens = currentClient.fcmTokens || [];
+            if (!existingTokens.includes(currentToken)) {
+                const clientRef = doc(db, 'clients', currentClient.id);
+                await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
+                console.log('Token FCM guardado.');
+            }
+        }
+
+        onMessage(messaging, (payload) => {
+            console.log('Mensaje recibido en primer plano:', payload);
+            showToast(`${payload.notification.title}: ${payload.notification.body}`);
+            const newNotif = {
+                title: payload.notification.title, body: payload.notification.body, icon: 'bell', read: false, timestamp: new Date(), id: `fg_${Date.now()}`
+            };
+            const clientRef = doc(db, 'clients', currentClient.id);
+            updateDoc(clientRef, { notifications: arrayUnion(newNotif) });
+        });
+
+    } catch (err) {
+        console.error('Ocurrió un error al configurar FCM.', err);
+    }
+}
+
         function showMainApp(clientId) {
             document.getElementById('login-view').style.display = 'none';
             document.getElementById('splash-screen').style.display = 'none';
@@ -1169,46 +1237,7 @@
             });
         }
         
-        async function setupFCM() {
-            try {
-                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                    console.warn("Push notifications are not fully supported in this browser.");
-                    return;
-                }
-
-                const messaging = getMessaging(app);
                 
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    console.log('Unable to get permission to notify.');
-                    return;
-                }
-
-                if (FCM_VAPID_KEY === "SUA_VAPID_KEY_AQUI") {
-                     console.warn("Firebase VAPID key is not set. Push notifications will not work.");
-                     return;
-                }
-
-                const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
-                if (currentToken) {
-                    const existingTokens = currentClient.fcmTokens || [];
-                    if (!existingTokens.includes(currentToken)) {
-                        const clientRef = doc(db, 'clients', currentClient.id);
-                        await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
-                        console.log('FCM token saved.');
-                    }
-                }
-
-                onMessage(messaging, (payload) => {
-                    console.log('Message received in foreground:', payload);
-                    showToast(`${payload.notification.title}: ${payload.notification.body}`);
-                });
-
-            } catch (err) {
-                console.error('An error occurred while setting up FCM.', err);
-            }
-        }
-        
         function showCropperModal(file) {
             const cropperModal = document.getElementById('cropperModal');
             cropperModal.innerHTML = `
