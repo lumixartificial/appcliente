@@ -1160,32 +1160,55 @@ async function checkAndSendLatePaymentNotifications() {
         }
 
         async function setupFCM() {
+    const LOG_PREFIX = `[CLIENTE-FCM-DIAGNOSTICO]`;
+    console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
     try {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-            console.warn("Notificaciones Push no son soportadas en este navegador.");
+            console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
             return;
         }
+        console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
 
         const messaging = getMessaging(app);
+        console.log(`${LOG_PREFIX} Objeto de Messaging obtenido.`);
 
+        console.log(`${LOG_PREFIX} Solicitando permiso del usuario...`);
         const permission = await Notification.requestPermission();
+        console.log(`${LOG_PREFIX} El permiso del usuario es: ${permission}`);
         if (permission !== 'granted') {
-            console.log('Permiso para notificar denegado.');
+            showToast('Permiso para notificaciones denegado.', true);
             return;
         }
 
+        if (FCM_VAPID_KEY === "SUA_VAPID_KEY_AQUI" || !FCM_VAPID_KEY) {
+            console.error(`${LOG_PREFIX} ERROR FATAL: La VAPID key no está configurada.`);
+            showToast('Configuración de notificaciones incompleta (sin VAPID key).', true);
+            return;
+        }
+        console.log(`${LOG_PREFIX} VAPID Key encontrada.`);
+
+        console.log(`${LOG_PREFIX} Obteniendo token de FCM... (Este paso puede tardar)`);
         const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
-        if (currentToken && currentClient) {
-            const existingTokens = currentClient.fcmTokens || [];
-            if (!existingTokens.includes(currentToken)) {
-                const clientRef = doc(db, 'clients', currentClient.id);
-                await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
-                console.log('Token FCM guardado.');
+
+        if (currentToken) {
+            console.log(`${LOG_PREFIX} ¡TOKEN OBTENIDO CON ÉXITO!: ${currentToken}`);
+            if (currentClient) {
+                const existingTokens = currentClient.fcmTokens || [];
+                if (!existingTokens.includes(currentToken)) {
+                    const clientRef = doc(db, 'clients', currentClient.id);
+                    await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
+                    console.log(`${LOG_PREFIX} Token nuevo guardado en Firestore.`);
+                } else {
+                    console.log(`${LOG_PREFIX} El token ya existía en Firestore.`);
+                }
             }
+        } else {
+            console.error(`${LOG_PREFIX} ERROR FATAL: No se pudo obtener el token. Esto suele ocurrir si el registro del Service Worker falló. Verifica la ruta del archivo 'firebase-messaging-sw.js' y que la VAPID key sea correcta.`);
+            showToast('Falha ao obter token de notificação.', true);
         }
 
         onMessage(messaging, (payload) => {
-            console.log('Mensaje recibido en primer plano:', payload);
+            console.log(`${LOG_PREFIX} Notificación recibida en PRIMER PLANO:`, payload);
             showToast(`${payload.notification.title}: ${payload.notification.body}`);
             const newNotif = {
                 title: payload.notification.title, body: payload.notification.body, icon: 'bell', read: false, timestamp: new Date(), id: `fg_${Date.now()}`
@@ -1194,10 +1217,20 @@ async function checkAndSendLatePaymentNotifications() {
             updateDoc(clientRef, { notifications: arrayUnion(newNotif) });
         });
 
+        console.log(`${LOG_PREFIX} --- setupFCM finalizado con éxito ---`);
+
     } catch (err) {
-        console.error('Ocurrió un error al configurar FCM.', err);
+        console.error(`${LOG_PREFIX} ERROR CATASTRÓFICO en setupFCM:`, err);
+        if (err.code === 'messaging/permission-blocked') {
+            showToast('As notificações estão bloqueadas. Ative-as nas configurações do seu navegador.', true);
+        } else if (err.code === 'messaging/sw-registration-failed') {
+             showToast('Falha ao registrar o serviço de notificação.', true);
+        } else {
+            showToast('Falha ao configurar as notificações push.', true);
+        }
     }
 }
+
 
         function showMainApp(clientId) {
             document.getElementById('login-view').style.display = 'none';
@@ -1237,7 +1270,8 @@ async function checkAndSendLatePaymentNotifications() {
             });
         }
         
-                
+        
+        
         function showCropperModal(file) {
             const cropperModal = document.getElementById('cropperModal');
             cropperModal.innerHTML = `
@@ -1497,7 +1531,7 @@ async function checkAndSendLatePaymentNotifications() {
               // Los Service Workers requieren un contexto seguro (HTTPS) o ser localhost para funcionar.
               // Esta verificación previene errores en entornos de previsualización que no son HTTPS.
               if (location.protocol === 'https:' || location.hostname === 'localhost') {
-                navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                navigator.serviceWorker.register('firebase-messaging-sw.js')
                   .then(function(registration) {
                     console.log('Service Worker registrado con éxito:', registration);
                   }).catch(function(error) {
