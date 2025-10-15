@@ -290,7 +290,22 @@
         .modal-content-wrapper { flex-grow: 1; overflow-y: auto; }
         .action-buttons { background-color: var(--surface); border-top: 1px solid var(--border-color); padding: 15px 20px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: flex; gap: 15px; margin-top: auto; position: sticky; bottom: 0; flex-shrink: 0; }
         .action-buttons button { flex-grow: 1; padding: 15px; font-size: 1em; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .btn-primary { background-color: var(--accent-purple); color: white; }
+        
+        .btn-primary {
+    background-color: var(--accent-purple);
+    color: white;
+    padding: 15px;
+    font-size: 1em;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
         .btn-secondary { background-color: var(--bg); color: var(--text-primary); border: 1px solid var(--border-color); }
         
         .form-group { margin-bottom: 15px; }
