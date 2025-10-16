@@ -1,7 +1,6 @@
 // Versión 9 - Forzar actualización de caché
 // Importar los scripts de Firebase necesarios
 // Importamos los scripts de Firebase necesarios
-
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
@@ -19,7 +18,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-const LOG_PREFIX = `[SW-CLIENTE v7.0]`;
+const LOG_PREFIX = `[SW-CLIENTE v8.0]`;
 console.log(`${LOG_PREFIX} Service Worker del Cliente cargado y listo.`);
 
 /**
@@ -39,6 +38,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.data.body,
     icon: payload.data.icon,
+    tag: 'lumix-cliente-notification', // Tag para agrupar notificaciones
     data: { // La 'data' aquí es para que el evento 'notificationclick' sepa a dónde ir.
       url: payload.data.url 
     }
@@ -50,7 +50,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 /**
- * [LÓGICA PARA EL CLIC]
+ * [LÓGICA PARA EL CLIC - Clonada del Cobrador]
  * Se ejecuta cuando el usuario toca la notificación.
  */
 self.addEventListener('notificationclick', (event) => {
@@ -59,6 +59,7 @@ self.addEventListener('notificationclick', (event) => {
 
     const targetUrl = event.notification.data.url || self.location.origin;
 
+    // Busca si la app ya está abierta para enfocarla, si no, abre una nueva ventana.
     const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then((windowClients) => {
         for (const client of windowClients) {
