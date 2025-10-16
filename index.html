@@ -1256,7 +1256,19 @@ async function checkAndSendLatePaymentNotifications() {
                         checkAndSendLatePaymentNotifications(); // Executa imediatamente
                         // E depois a cada 12 horas para evitar chamadas excessivas
                         notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 12 * 60 * 60 * 1000);
-                        setupFCM();
+                        
+                        // [CÓDIGO CORREGIDO] Espera a que el Service Worker esté listo ANTES de configurar FCM.
+                        if ('serviceWorker' in navigator) {
+                            navigator.serviceWorker.ready.then(registration => {
+                                console.log('Service Worker del cliente está activo. Configurando FCM ahora.');
+                                setupFCM(); // La llamada se hace aquí, en el momento seguro.
+                            }).catch(err => {
+                                console.error('El Service Worker del cliente no estuvo listo, no se pudo configurar FCM.', err);
+                            });
+                        } else {
+                            console.error('Service Worker no es soportado por el navegador, no se pueden activar las notificaciones push.');
+                        }
+
                         isFirstLoad = false;
                     }
                 } else {
@@ -1607,5 +1619,3 @@ if (closeInstallBtn) {
     </script>
 </body>
 </html>
-
-
