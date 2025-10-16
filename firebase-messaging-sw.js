@@ -1,7 +1,7 @@
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
-// Configuración de Firebase para la App del Cliente.
+// Configuración de Firebase.
 const firebaseConfig = {
     apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
     authDomain: "lumix-financas-app.firebaseapp.com",
@@ -15,17 +15,16 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-const LOG_PREFIX = `[SW-CLIENTE v7.0]`;
-console.log(`${LOG_PREFIX} Service Worker del Cliente cargado y listo.`);
+console.log(`[SW-CLIENTE v5.0] Service Worker del Cliente cargado y listo.`);
 
 /**
- * [LÓGICA CLAVE PARA MOSTRAR NOTIFICACIONES]
- * Se ejecuta cuando llega un mensaje y la app está en segundo plano.
- * CORREGIDO para leer desde 'payload.data' como en la app del cobrador.
+ * Esto se ejecuta cuando llega un mensaje y la app está cerrada o en segundo plano.
  */
 messaging.onBackgroundMessage((payload) => {
+  const LOG_PREFIX = `[SW-CLIENTE v5.0]`;
   console.log(`${LOG_PREFIX} >>> MENSAJE RECIBIDO <<<`, payload);
 
+  // VALIDACIÓN CLAVE: El payload debe contener la sección 'data'
   if (!payload.data) {
     console.error(`${LOG_PREFIX} ERROR: El payload no contiene la sección 'data'.`, payload);
     return;
@@ -35,50 +34,37 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.data.body,
     icon: payload.data.icon,
-    data: { // La 'data' aquí es para que el evento 'notificationclick' sepa a dónde ir.
+    // La 'data' aquí es para que el evento 'notificationclick' sepa a dónde ir.
+    data: {
       url: payload.data.url 
     }
   };
 
   console.log(`${LOG_PREFIX} Mostrando notificación:`, notificationTitle, notificationOptions);
   
+  // Muestra la notificación
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 /**
- * [LÓGICA PARA EL CLIC]
- * Se ejecuta cuando el usuario toca la notificación.
+ * Esto se ejecuta cuando el usuario hace clic en la notificación.
  */
 self.addEventListener('notificationclick', (event) => {
-    console.log(`${LOG_PREFIX} Clic en notificación recibido.`);
+    console.log(`[SW-CLIENTE v5.0] Clic en notificación recibido.`);
     event.notification.close();
 
-    const targetUrl = event.notification.data.url || self.location.origin;
-
-    const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
-    .then((windowClients) => {
-        for (const client of windowClients) {
-            if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
-                console.log(`${LOG_PREFIX} Encontrada una ventana abierta. Navegando a: ${targetUrl}`);
-                return client.navigate(targetUrl).then(c => c.focus());
-            }
-        }
-        if (clients.openWindow) {
-            console.log(`${LOG_PREFIX} No se encontraron ventanas. Abriendo una nueva en: ${targetUrl}`);
-            return clients.openWindow(targetUrl);
-        }
-    });
+    // Abre la URL que se guardó en la 'data' de la notificación
+    const promiseChain = clients.openWindow(event.notification.data.url);
     event.waitUntil(promiseChain);
 });
 
-
-// Ciclo de vida del Service Worker.
+// Ciclo de vida del Service Worker para asegurar que siempre esté actualizado.
 self.addEventListener('install', (event) => {
-  console.log(`${LOG_PREFIX} Instalando...`);
+  console.log(`[SW-CLIENTE v5.0] Instalando...`);
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  console.log(`${LOG_PREFIX} Activado.`);
+  console.log(`[SW-CLIENTE v5.0] Activado.`);
   event.waitUntil(self.clients.claim());
 });
