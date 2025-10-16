@@ -1,6 +1,7 @@
 // Versión 9 - Forzar actualización de caché
 // Importar los scripts de Firebase necesarios
 // Importamos los scripts de Firebase necesarios
+
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
@@ -18,13 +19,13 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-const LOG_PREFIX = `[SW-CLIENTE v8.0]`;
-console.log(`${LOG_PREFIX} Service Worker del Cliente cargado y listo.`);
+const LOG_PREFIX = `[SW-CLIENTE v9.0]`;
+console.log(`${LOG_PREFIX} Service Worker del Cliente cargado.`);
 
 /**
- * [LÓGICA CLAVE PARA MOSTRAR NOTIFICACIONES]
+ * [LÓGICA PARA MOSTRAR NOTIFICACIONES - Clonada del Cobrador]
  * Se ejecuta cuando llega un mensaje y la app está en segundo plano.
- * CORREGIDO para leer desde 'payload.data' como en la app del cobrador.
+ * Lee desde 'payload.data'.
  */
 messaging.onBackgroundMessage((payload) => {
   console.log(`${LOG_PREFIX} >>> MENSAJE RECIBIDO <<<`, payload);
@@ -38,14 +39,13 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.data.body,
     icon: payload.data.icon,
-    tag: 'lumix-cliente-notification', // Tag para agrupar notificaciones
-    data: { // La 'data' aquí es para que el evento 'notificationclick' sepa a dónde ir.
+    tag: 'lumix-cliente-notification',
+    data: { 
       url: payload.data.url 
     }
   };
 
   console.log(`${LOG_PREFIX} Mostrando notificación:`, notificationTitle, notificationOptions);
-  
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
@@ -56,20 +56,16 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
     console.log(`${LOG_PREFIX} Clic en notificación recibido.`);
     event.notification.close();
-
     const targetUrl = event.notification.data.url || self.location.origin;
 
-    // Busca si la app ya está abierta para enfocarla, si no, abre una nueva ventana.
     const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then((windowClients) => {
         for (const client of windowClients) {
             if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
-                console.log(`${LOG_PREFIX} Encontrada una ventana abierta. Navegando a: ${targetUrl}`);
                 return client.navigate(targetUrl).then(c => c.focus());
             }
         }
         if (clients.openWindow) {
-            console.log(`${LOG_PREFIX} No se encontraron ventanas. Abriendo una nueva en: ${targetUrl}`);
             return clients.openWindow(targetUrl);
         }
     });
