@@ -714,7 +714,7 @@
                 const clientRef = doc(db, 'clients', currentClient.id);
                 // 1. Añade a la lista interna de notificaciones de la app
                 const internalNotif = {
-                    title: title, body: body, icon: icon, read: false, timestamp: serverTimestamp(), id: `${type}_${Date.now()}`
+                    title: title, body: body, icon: icon, read: false, timestamp: new Date(), id: `${type}_${Date.now()}`
                 };
                 await updateDoc(clientRef, {
                     notifications: arrayUnion(internalNotif),
@@ -1653,4 +1653,3 @@
     </script>
 </body>
 </html>
-
