@@ -59,3 +59,4 @@ self.addEventListener('activate', (event) => {
   console.log(`${LOG_PREFIX} Evento 'activate' disparado. Tomando control de los clientes.`);
   event.waitUntil(self.clients.claim());
 });
+
