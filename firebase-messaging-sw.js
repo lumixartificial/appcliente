@@ -1,7 +1,10 @@
+const SW_VERSION = "v7.0-cliente";
+
+// Importa los scripts de Firebase en formato compatibilidad, igual que en el SW del cobrador.
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
-// La configuración de Firebase no cambia
+// Configuración de Firebase.
 const firebaseConfig = {
     apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
     authDomain: "lumix-financas-app.firebaseapp.com",
@@ -11,52 +14,88 @@ const firebaseConfig = {
     appId: "1:463777495321:web:106118f53f56abd206ed88"
 };
 
+// Inicializa Firebase.
 firebase.initializeApp(firebaseConfig);
+
+// Obtén la instancia de Messaging.
 const messaging = firebase.messaging();
-const LOG_PREFIX = `[SW-CLIENTE-DIAGNOSTICO]`;
 
-console.log(`${LOG_PREFIX} Service Worker v7.0 cargado y Firebase inicializado.`);
+console.log(`[SW-CLIENTE] Service Worker ${SW_VERSION} cargado y listo.`);
 
+/**
+ * Se ejecuta cuando llega un mensaje y la app está en segundo plano o cerrada.
+ */
 messaging.onBackgroundMessage((payload) => {
-  console.log(`${LOG_PREFIX} >>> MENSAJE RECIBIDO EN SEGUNDO PLANO <<<`, payload);
+    const LOG_PREFIX = `[SW-CLIENTE-DIAGNOSTICO ${SW_VERSION}]`;
+    console.log(`${LOG_PREFIX} >>> ¡MENSAJE EN SEGUNDO PLANO RECIBIDO! <<<`, payload);
 
-  if (!payload.data) {
-    console.error(`${LOG_PREFIX} ERROR: El payload recibido NO contiene la sección 'data'. No se puede mostrar la notificación. Payload:`, payload);
-    return;
-  }
-  console.log(`${LOG_PREFIX} La sección 'data' fue encontrada en el payload.`);
+    try {
+        if (!payload.data) {
+            console.error(`${LOG_PREFIX} ERROR FATAL: El payload no contiene la sección 'data'.`);
+            return;
+        }
+        console.log(`${LOG_PREFIX} Payload 'data' validado.`, payload.data);
 
-  const notificationTitle = payload.data.title;
-  const notificationOptions = {
-    body: payload.data.body,
-    icon: payload.data.icon,
-    tag: payload.data.tag,
-    data: {
-      url: payload.data.link
+        const notificationTitle = payload.data.title;
+        const notificationOptions = {
+            body: payload.data.body,
+            icon: payload.data.icon || 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png',
+            tag: 'lumix-cliente-notification', // Tag específico para el cliente
+            data: {
+                // La URL a la que se navegará al hacer clic. Apunta a la sección de notificaciones.
+                url: self.location.origin + '/#notifications' 
+            }
+        };
+        console.log(`${LOG_PREFIX} Opciones de notificación preparadas:`, notificationOptions);
+
+        console.log(`${LOG_PREFIX} Intentando mostrar la notificación AHORA...`);
+        return self.registration.showNotification(notificationTitle, notificationOptions)
+            .then(() => {
+                console.log(`${LOG_PREFIX} ¡ÉXITO! showNotification() se completó.`);
+            })
+            .catch(err => {
+                console.error(`${LOG_PREFIX} ERROR DENTRO de showNotification():`, err);
+            });
+
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ERROR CATASTRÓFICO DENTRO DE onBackgroundMessage:`, error);
     }
-  };
-
-  console.log(`${LOG_PREFIX} Preparando para mostrar notificación con Título: [${notificationTitle}] y Opciones:`, notificationOptions);
-  
-  return self.registration.showNotification(notificationTitle, notificationOptions);
-});
-
-self.addEventListener('notificationclick', (event) => {
-    console.log(`${LOG_PREFIX} El usuario hizo CLIC en la notificación.`);
-    event.notification.close();
-    console.log(`${LOG_PREFIX} Notificación cerrada. Intentando abrir URL: [${event.notification.data.url}]`);
-
-    const promiseChain = clients.openWindow(event.notification.data.url);
-    event.waitUntil(promiseChain);
 });
 
 self.addEventListener('install', (event) => {
-  console.log(`${LOG_PREFIX} Evento 'install' disparado. Forzando activación con skipWaiting().`);
-  event.waitUntil(self.skipWaiting());
+    console.log(`[SW-CLIENTE ${SW_VERSION}] Instalando... Forzando activación.`);
+    event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  console.log(`${LOG_PREFIX} Evento 'activate' disparado. Tomando control de los clientes.`);
-  event.waitUntil(self.clients.claim());
+    console.log(`[SW-CLIENTE ${SW_VERSION}] Activado y tomando control de los clientes.`);
+    event.waitUntil(self.clients.claim());
+});
+
+/**
+ * Se ejecuta cuando el usuario hace clic en la notificación.
+ */
+self.addEventListener('notificationclick', (event) => {
+    console.log(`[SW-CLIENTE ${SW_VERSION}] El usuario hizo clic en la notificación.`);
+    event.notification.close();
+
+    const targetUrl = event.notification.data.url || self.location.origin;
+
+    // Busca si la app ya está abierta para enfocarla; si no, abre una nueva ventana.
+    const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((windowClients) => {
+        // Revisa si hay una ventana de la app abierta
+        for (const client of windowClients) {
+            if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
+                // Si la encuentra, la enfoca y navega a la URL correcta.
+                return client.navigate(targetUrl).then(c => c.focus());
+            }
+        }
+        // Si no hay ninguna ventana abierta, abre una nueva.
+        if (clients.openWindow) {
+            return clients.openWindow(targetUrl);
+        }
+    });
+    event.waitUntil(promiseChain);
 });
 
