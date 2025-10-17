@@ -262,7 +262,7 @@
         .payment-status-tag.pending { background-color: rgba(250, 204, 21, 0.15); color: #856404; }
         .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.1); color: var(--accent-green); }
         body.dark-mode .payment-status-tag.pending { background-color: rgba(253, 224, 71, 0.1); color: var(--accent-yellow); }
-        .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
+        body.dark-mode .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
         .no-history { color: var(--text-secondary); text-align: center; padding: 20px; }
 
         .bottom-nav { position: static; flex-shrink: 0; background-color: var(--surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05); transition: background-color 0.3s, border-color 0.3s; z-index: 150; }
@@ -292,19 +292,19 @@
         .action-buttons button { flex-grow: 1; padding: 15px; font-size: 1em; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
         
         .btn-primary {
-    background-color: var(--accent-purple);
-    color: white;
-    padding: 15px;
-    font-size: 1em;
-    font-weight: 600;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
+            background-color: var(--accent-purple);
+            color: white;
+            padding: 15px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
 
         .btn-secondary { background-color: var(--bg); color: var(--text-primary); border: 1px solid var(--border-color); }
         
@@ -523,11 +523,11 @@
         
         let currentClient = null;
         let unsubscribeClient = null;
-        let notificationInterval = null; // Adicionado para controlar o verificador de notificações
         let currentLang = localStorage.getItem('language') || 'pt';
         let deferredPrompt; // For PWA installation
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
         let receiptFile = null;
+        let notificationInterval;
 
         const PIX_KEY_FIXED = "000.0.000-00"; // Substitua pela sua chave PIX
         const PIX_KEY_MANUAL = "chave-manual@email.com"; // Substitua pela sua chave PIX
@@ -535,105 +535,218 @@
 
         const translations = {
             pt: {
-                welcome: 'Bem-vindo!', welcomeMsg: 'Acesse sua conta para ver os detalhes do seu empréstimo.', username: 'Usuário', password: 'Senha', loginBtn: 'Entrar',
-                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Portal do Cliente', greeting: 'Olá', loanProgress: 'Progresso do Empréstimo',
-                totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Histórico de Pagamentos', noPayments: 'Nenhum pagamento registrado ainda.',
-                profile: 'Meu Perfil', settings: 'Configurações', logout: 'Sair da Conta', cropImage: 'Recortar Imagem', confirmCrop: 'Confirmar', cancel: 'Cancelar',
-                invalidCredentials: 'Usuário ou senha inválidos.', genericError: 'Ocorreu um erro.', accountNotFound: 'Sua conta não foi encontrada.', dataLoadError: 'Erro ao carregar seus dados.',
-                picUpdateSuccess: 'Foto de perfil atualizada!', picUpdateError: 'Falha ao atualizar a foto.',
-                reputationScore: 'Pontuação de Reputação', reputationPerfect: 'Excelente', reputationGood: 'Bom', reputationRegular: 'Regular', reputationBad: 'Ruim',
-                reputationInfo: 'Mantenha seus pagamentos em dia para uma boa reputação. Isso aumenta suas chances de renovar ou ampliar seu crédito no futuro.',
-                payInstallment: 'Pagar Parcela', qrCodePayment: 'Pagamento com QR Code', copyCode: 'Copiar Código', manualPayment: 'Pagamento Manual (Outros Valores)',
-                manualPixKey: 'Chave PIX Manual', uploadReceipt: 'Anexar Comprovante', submitForVerification: 'Enviar para Verificação', receiptSent: 'Comprovante enviado! Aguardando verificação.',
-                uploadError: 'Erro ao enviar comprovante.', awaitingVerification: 'Verificando', approved: 'Aprovado', copied: 'Copiado!',
-                paymentAmountLabel: 'Valor Pago', invalidAmount: 'Por favor, insira um valor de pagamento válido.',
-                installmentValue: 'Valor da Parcela', navRefinance: 'Refinanciar', refinanceTitle: 'Refinanciamento & Crédito',
-                postponeInstallment: 'Adiar Parcela', requestNewFinancing: 'Solicitar Novo Financiamento',
-                reputationNotGoodTitle: 'Opção Indisponível',
-                reputationNotGoodMsg: 'Sua pontuação de reputação precisa ser "Excelente" para solicitar novos créditos. Continue pagando em dia!',
-                newAmount: 'Novo Valor Deseado', newInstallments: 'Nº de Parcelas', sendForAnalysis: 'Enviar para Análise',
-                analysisSent: 'Solicitação enviada! Aguarde o contato do seu cobrador.',
-                installAppMsg: 'Instale o app para uma melhor experiência!',
-                installBtn: 'Instalar',
-                navNotifications: 'Notificações', 
-                notificationsTitle: 'Minhas Notificações', 
-                noNotifications: 'Nenhuma notificação ainda.',
-                notificationRead: 'Notificação marcada como lida.',
-                clearNotifications: 'Limpar Todas',
+                welcome: 'Bem-vindo de volta',
+                welcomeMsg: 'Acesse sua conta para continuar',
+                username: 'Nome de usuário',
+                password: 'Senha',
+                loginBtn: 'Entrar',
+                invalidCredentials: 'Usuário ou senha inválidos.',
+                genericError: 'Ocorreu um erro. Tente novamente.',
+                appTitle: 'Portal do Cliente',
+                loanProgress: 'Progresso do Empréstimo',
+                reputationScore: 'Pontuação de Reputação',
+                reputationInfo: 'Pagar em dia melhora sua pontuação.',
+                totalValue: 'Valor Total',
+                remainingValue: 'Valor Restante',
+                installmentValue: 'Valor da Parcela',
+                paymentHistory: 'Histórico de Pagamentos',
+                noPayments: 'Nenhum pagamento registrado.',
+                reputationPerfect: 'Perfeito',
+                reputationGood: 'Bom',
+                reputationRegular: 'Regular',
+                reputationBad: 'Ruim',
+                payInstallment: 'Pagar Parcela',
+                qrCodePayment: 'Pagar com QR Code',
+                manualPayment: 'Pagar com Chave Manual',
+                manualPixKey: 'Use esta chave PIX para pagamento manual:',
+                copyCode: 'Copiar Código',
+                copied: 'Código PIX copiado!',
+                uploadReceipt: 'Enviar Comprovante',
+                paymentAmountLabel: 'Valor do Pagamento',
+                submitForVerification: 'Enviar para Verificação',
+                receiptSent: 'Comprovante enviado para análise!',
+                uploadError: 'Erro ao enviar comprovante.',
+                invalidAmount: 'Por favor, insira um valor válido.',
+                paymentSent: 'enviou um comprovante de pagamento no valor de',
+                settings: 'Configurações',
+                logout: 'Sair',
+                accountNotFound: 'Conta não encontrada. Faça login novamente.',
+                dataLoadError: 'Erro ao carregar dados.',
+                cropImage: 'Recortar Imagem',
+                cancel: 'Cancelar',
+                confirmCrop: 'Confirmar',
+                picUpdateSuccess: 'Foto de perfil atualizada!',
+                picUpdateError: 'Erro ao atualizar foto.',
+                navDashboard: 'Painel',
+                navPay: 'Pagar',
+                navRefinance: 'Refinanciar',
+                navNotifications: 'Notificações',
+                notificationsTitle: 'Notificações',
+                clearNotifications: 'Limpar tudo',
                 notificationsCleared: 'Notificações limpas.',
-                latePaymentReminderTitle: 'Lembrete de Pagamento',
-                latePaymentReminderBody: 'Notamos um atraso em seu pagamento. Para evitar taxas adicionais, por favor, regularize sua situação o mais breve possível.',
-                urgentWarningTitle: 'AVISO URGENTE: Pagamentos Atrasados',
-                urgentWarningBody: 'Você tem {count} parcelas atrasadas. É crucial que você regularize sua dívida para manter sua reputação de crédito.' ,
-                paymentSent: 'enviou um pagamento de',
+                notificationRead: 'Notificação marcada como lida.',
+                noNotifications: 'Nenhuma notificação nova.',
+                awaitingVerification: 'Aguardando verificação',
+                approved: 'Aprovado',
+                installAppTitle: 'Instale nosso aplicativo',
+                installAppMsg: 'Uma experiência mais rápida e completa.',
+                installBtn: 'Instalar',
+                refinanceTitle: 'Refinanciamento',
+                requestNewFinancing: 'Solicitar Novo Financiamento',
+                newAmount: 'Novo Valor Desejado',
+                newInstallments: 'Número de Parcelas',
+                sendForAnalysis: 'Enviar para Análise',
+                analysisSent: 'Solicitação enviada para análise!',
                 refinanceRequested: 'solicitou um refinanciamento de',
-                paymentApprovedTitle: 'Pagamento Aprovado',
-paymentApprovedBody: 'Seu pagamento de {amount} foi aprovado!',
-paymentRejectedTitle: 'Pagamento Rejeitado',
-paymentRejectedBody: 'Seu comprovante foi rejeitado. Entre em contato com seu cobrador.',
-refinanceApprovedTitle: 'Refinanciamento Aprovado!',
-refinanceApprovedBody: 'Sua solicitação de refinanciamento foi aprovada.',
-refinanceRejectedTitle: 'Refinanciamento Rejeitado',
-refinanceRejectedBody: 'Sua solicitação foi rejeitada.',
+                reputationNotGoodTitle: 'Melhore sua Pontuação',
+                reputationNotGoodMsg: 'Para solicitar um refinanciamento, sua pontuação de reputação precisa ser "Perfeita". Continue pagando suas parcelas em dia!',
+                latePaymentReminderTitle: 'Lembrete de Pagamento',
+                latePaymentReminderBody: 'Notamos um atraso em seu pagamento. Para evitar encargos, por favor, regularize sua situação.',
+                urgentWarningTitle: 'AVISO URGENTE: Pagamentos Atrasados',
+                urgentWarningBody: 'Você possui {count} parcelas em atraso. É crucial que você regularize sua dívida.'
             },
             es: {
-                welcome: '¡Bienvenido!', welcomeMsg: 'Accede a tu cuenta para ver los detalles de tu préstamo.', username: 'Usuario', password: 'Contraseña', loginBtn: 'Entrar',
-                navDashboard: 'Dashboard', navPay: 'Pagar', navProfile: 'Perfil', appTitle: 'Portal Cliente', greeting: 'Hola', loanProgress: 'Progreso del Préstamo',
-                totalValue: 'Valor Total', remainingValue: 'Valor Restante', paymentHistory: 'Historial de Pagos', noPayments: 'Aún no hay pagos registrados.',
-                profile: 'Mi Perfil', settings: 'Ajustes', logout: 'Cerrar Sesión', cropImage: 'Recortar Imagen', confirmCrop: 'Confirmar', cancel: 'Cancelar',
-                invalidCredentials: 'Usuario o contraseña inválidos.', genericError: 'Ocurrió un error.', accountNotFound: 'No se encontró tu cuenta.', dataLoadError: 'Error al cargar tus datos.',
-                picUpdateSuccess: '¡Foto de perfil actualizada!', picUpdateError: 'Error al actualizar la foto.',
-                reputationScore: 'Puntuación de Reputación', reputationPerfect: 'Excelente', reputationGood: 'Bueno', reputationRegular: 'Regular', reputationBad: 'Mala',
-                reputationInfo: 'Mantén tus pagos al día para tener una buena reputación. Esto aumenta tus oportunidades de renovar o ampliar tu crédito en el futuro.',
-                payInstallment: 'Pagar Cuota', qrCodePayment: 'Pago con Código QR', copyCode: 'Copiar Código', manualPayment: 'Pago Manual (Otros Valores)',
-                manualPixKey: 'Clave PIX Manual', uploadReceipt: 'Adjuntar Comprobante', submitForVerification: 'Enviar para Verificación', receiptSent: '¡Comprobante enviado! Esperando verificación.',
-                uploadError: 'Error al enviar el comprobante.', awaitingVerification: 'Verificando', approved: 'Aprobado', copied: '¡Copiado!',
-                paymentAmountLabel: 'Monto Pagado', invalidAmount: 'Por favor, ingrese un monto de pago válido.',
-                installmentValue: 'Valor de la Cuota', navRefinance: 'Refinanciar', refinanceTitle: 'Refinanciación y Crédito',
-                postponeInstallment: 'Aplazar Cuota', requestNewFinancing: 'Solicitar Nueva Financiación',
-                reputationNotGoodTitle: 'Opción No Disponible',
-                reputationNotGoodMsg: 'Tu puntuación de reputación debe ser "Excelente" para solicitar nuevos créditos. ¡Sigue pagando al día!',
-                newAmount: 'Nuevo Monto Deseado', newInstallments: 'Nº de Cuotas', sendForAnalysis: 'Enviar para Análisis',
-                analysisSent: '¡Solicitud enviada! Espere el contacto de su cobrador.',
-                installAppMsg: '¡Instala la app para una mejor experiencia!',
-                installBtn: 'Instalar',
-                navNotifications: 'Notificaciones', 
-                notificationsTitle: 'Mis Notificaciones', 
-                noNotifications: 'Aún no hay notificaciones.',
+                welcome: 'Bienvenido de vuelta',
+                welcomeMsg: 'Accede a tu cuenta para continuar',
+                username: 'Nombre de usuario',
+                password: 'Contraseña',
+                loginBtn: 'Entrar',
+                invalidCredentials: 'Usuario o contraseña inválidos.',
+                genericError: 'Ocurrió un error. Inténtalo de nuevo.',
+                appTitle: 'Portal del Cliente',
+                loanProgress: 'Progreso del Préstamo',
+                reputationScore: 'Puntuación de Reputación',
+                reputationInfo: 'Pagar a tiempo mejora tu puntuación.',
+                totalValue: 'Valor Total',
+                remainingValue: 'Valor Restante',
+                installmentValue: 'Valor de la Cuota',
+                paymentHistory: 'Historial de Pagos',
+                noPayments: 'No hay pagos registrados.',
+                reputationPerfect: 'Perfecto',
+                reputationGood: 'Bueno',
+                reputationRegular: 'Regular',
+                reputationBad: 'Malo',
+                payInstallment: 'Pagar Cuota',
+                qrCodePayment: 'Pagar con Código QR',
+                manualPayment: 'Pagar con Clave Manual',
+                manualPixKey: 'Usa esta clave PIX para pago manual:',
+                copyCode: 'Copiar Código',
+                copied: '¡Código PIX copiado!',
+                uploadReceipt: 'Enviar Comprobante',
+                paymentAmountLabel: 'Valor del Pago',
+                submitForVerification: 'Enviar para Verificación',
+                receiptSent: '¡Comprobante enviado para análisis!',
+                uploadError: 'Error al enviar el comprobante.',
+                invalidAmount: 'Por favor, ingrese un valor válido.',
+                paymentSent: 'envió un comprobante de pago por valor de',
+                settings: 'Configuración',
+                logout: 'Salir',
+                accountNotFound: 'Cuenta no encontrada. Inicia sesión de nuevo.',
+                dataLoadError: 'Error al cargar los datos.',
+                cropImage: 'Recortar Imagen',
+                cancel: 'Cancelar',
+                confirmCrop: 'Confirmar',
+                picUpdateSuccess: '¡Foto de perfil actualizada!',
+                picUpdateError: 'Error al actualizar la foto.',
+                navDashboard: 'Panel',
+                navPay: 'Pagar',
+                navRefinance: 'Refinanciar',
+                navNotifications: 'Notificaciones',
+                notificationsTitle: 'Notificaciones',
+                clearNotifications: 'Limpiar todo',
+                notificationsCleared: 'Notificaciones limpiadas.',
                 notificationRead: 'Notificación marcada como leída.',
-                clearNotifications: 'Limpiar Todas',
-                notificationsCleared: 'Notificaciones eliminadas.',
+                noNotifications: 'No hay notificaciones nuevas.',
+                awaitingVerification: 'Esperando verificación',
+                approved: 'Aprobado',
+                installAppTitle: 'Instala nuestra aplicación',
+                installAppMsg: 'Una experiencia más rápida y completa.',
+                installBtn: 'Instalar',
+                refinanceTitle: 'Refinanciación',
+                requestNewFinancing: 'Solicitar Nueva Financiación',
+                newAmount: 'Nuevo Valor Deseado',
+                newInstallments: 'Número de Cuotas',
+                sendForAnalysis: 'Enviar para Análisis',
+                analysisSent: '¡Solicitud enviada para análisis!',
+                refinanceRequested: 'solicitó una refinanciación de',
+                reputationNotGoodTitle: 'Mejora tu Puntuación',
+                reputationNotGoodMsg: 'Para solicitar una refinanciación, tu puntuación de reputación debe ser "Perfecta". ¡Sigue pagando tus cuotas a tiempo!',
                 latePaymentReminderTitle: 'Recordatorio de Pago',
-                latePaymentReminderBody: 'Hemos notado un atraso en su pago. Para evitar cargos adicionales, por favor regularice su situación lo antes posible.',
+                latePaymentReminderBody: 'Hemos notado un retraso en su pago. Para evitar cargos, por favor, regularice su situación.',
                 urgentWarningTitle: 'AVISO URGENTE: Pagos Atrasados',
-                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda para mantener su reputación crediticia.' ,
-                paymentSent: 'envió un pago de',
-                refinanceRequested: 'solicitó un refinanciamiento de',
-                paymentApprovedTitle: 'Pago aprobado',
-paymentApprovedBody: '¡Su pago de {amount} fue aprobado!',
-paymentRejectedTitle: 'Pago rechazado',
-paymentRejectedBody: 'Su recibo fue rechazado. Por favor, contacte a su facturador.',
-refinanceApprovedTitle: '¡Refinanciamiento aprobado!',
-refinanceApprovedBody: 'Su solicitud de refinanciamiento fue aprobada.',
-refinanceRejectedTitle: 'Refinanciamiento rechazado',
-refinanceRejectedBody: 'Su solicitud fue rechazada.',
+                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda.'
             }
         };
 
-        const money = val => (typeof val !== 'number' || isNaN(val)) ? 'R$ 0,00' : val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        
-        function showToast(message, isError = false) {
-            const toastContainer = document.getElementById('toast-container');
-            if (!toastContainer) return;
-            const toast = document.createElement('div');
-            toast.className = `toast ${isError ? 'toast-error' : ''}`;
-            toast.textContent = message;
-            toastContainer.appendChild(toast);
-            setTimeout(() => toast.classList.add('show'), 10);
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 500);
-            }, 3500);
+        function money(value) {
+            return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        async function sendNotificationTicket(title, body, type, icon) {
+            const LOG_PREFIX = `[CLIENTE-APP]`;
+            if (!currentClient) return;
+            console.log(`${LOG_PREFIX} -> sendNotificationTicket: Iniciando creación de notificación y ticket PUSH.`);
+            try {
+                const clientRef = doc(db, 'clients', currentClient.id);
+                // 1. Añade a la lista interna de notificaciones de la app
+                const internalNotif = {
+                    title: title, body: body, icon: icon, read: false, timestamp: serverTimestamp(), id: `${type}_${Date.now()}`
+                };
+                await updateDoc(clientRef, {
+                    notifications: arrayUnion(internalNotif),
+                    lastLateNotificationTimestamp: serverTimestamp() // Reutilizamos este campo para evitar spam
+                });
+                console.log(`${LOG_PREFIX} -> sendNotificationTicket: Notificación INTERNA guardada en el historial del cliente.`);
+
+                // 2. Crea el ticket para la notificación PUSH
+                const ticketsCollectionRef = collection(db, 'clients', currentClient.id, 'pushNotificationTickets');
+                await addDoc(ticketsCollectionRef, {
+                    title: title, body: body, type: type
+                });
+
+                console.log(`${LOG_PREFIX} -> sendNotificationTicket: ¡ÉXITO! Ticket PUSH creado en Firestore.`);
+            } catch (error) {
+                console.error(`${LOG_PREFIX} -> sendNotificationTicket: ERROR FATAL al crear notificación/ticket.`, error);
+            }
+        }
+
+        async function checkAndSendLatePaymentNotifications() {
+            const LOG_PREFIX = `[CLIENTE-APP]`;
+            if (!currentClient) return;
+            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de pagos atrasados...`);
+
+            const lateInstallments = calculateLatePaymentDays(currentClient);
+            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Días de atraso calculados: ${lateInstallments}`);
+            
+            if (lateInstallments <= 0) {
+                console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: No hay atrasos. Verificación finalizada.`);
+                return;
+            }
+
+            const now = new Date();
+            const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+            const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
+
+            if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
+                console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Notificación de atraso suprimida, enviada recientemente (hace menos de 12h).`);
+                return;
+            }
+            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Es necesario enviar notificación. Preparando datos...`);
+
+            let title, body, type, icon;
+            if (lateInstallments === 1) {
+                title = translations[currentLang].latePaymentReminderTitle;
+                body = translations[currentLang].latePaymentReminderBody;
+                type = 'late_reminder';
+                icon = 'alarm-clock';
+            } else { 
+                title = translations[currentLang].urgentWarningTitle;
+                body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments);
+                type = 'urgent_warning';
+                icon = 'alert-triangle';
+            }
+
+            await sendNotificationTicket(title, body, type, icon);
         }
 
         function applyLanguage(lang) {
@@ -978,64 +1091,7 @@ refinanceRejectedBody: 'Su solicitud fue rechazada.',
                 }
             });
         }
-
-        async function sendNotificationTicket(title, body, type, icon) {
-    if (!currentClient) return;
-    try {
-        const clientRef = doc(db, 'clients', currentClient.id);
-        // 1. Añade a la lista interna de notificaciones de la app
-        const internalNotif = {
-            title: title, body: body, icon: icon, read: false, timestamp: serverTimestamp(), id: `${type}_${Date.now()}`
-        };
-        await updateDoc(clientRef, {
-            notifications: arrayUnion(internalNotif),
-            lastLateNotificationTimestamp: serverTimestamp() // Reutilizamos este campo para evitar spam
-        });
-
-        // 2. Crea el ticket para la notificación PUSH
-        const ticketsCollectionRef = collection(db, 'clients', currentClient.id, 'pushNotificationTickets');
-        await addDoc(ticketsCollectionRef, {
-            title: title, body: body, type: type
-        });
-
-        console.log(`Notificación interna y ticket PUSH para '${type}' creados.`);
-    } catch (error) {
-        console.error(`Error enviando notificación para '${type}':`, error);
-    }
-}
-
-async function checkAndSendLatePaymentNotifications() {
-    if (!currentClient) return;
-
-    const lateInstallments = calculateLatePaymentDays(currentClient);
-    if (lateInstallments <= 0) return; 
-
-    const now = new Date();
-    const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
-    const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
-
-    if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
-        console.log("Notificación de atraso suprimida, enviada recientemente.");
-        return;
-    }
-
-    let title, body, type, icon;
-    if (lateInstallments === 1) {
-        title = translations[currentLang].latePaymentReminderTitle;
-        body = translations[currentLang].latePaymentReminderBody;
-        type = 'late_reminder';
-        icon = 'alarm-clock';
-    } else { 
-        title = translations[currentLang].urgentWarningTitle;
-        body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments);
-        type = 'urgent_warning';
-        icon = 'alert-triangle';
-    }
-
-    await sendNotificationTicket(title, body, type, icon);
-}
-
-        // Função centralizada para exibir uma view
+        
         function showView(viewName) {
             const appContainer = document.getElementById('app-container');
             if (!appContainer) return;
@@ -1118,77 +1174,81 @@ async function checkAndSendLatePaymentNotifications() {
         }
 
         async function setupFCM() {
-    const LOG_PREFIX = `[CLIENTE-FCM-DIAGNOSTICO]`;
-    console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
-    try {
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-            console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
-            return;
-        }
-        console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
+            const LOG_PREFIX = `[CLIENTE-FCM-DIAGNOSTICO]`;
+            console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
+            try {
+                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                    console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
+                    return;
+                }
+                console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
 
-        const messaging = getMessaging(app);
-        console.log(`${LOG_PREFIX} Objeto de Messaging obtenido.`);
+                const messaging = getMessaging(app);
+                console.log(`${LOG_PREFIX} Objeto de Messaging obtenido.`);
 
-        console.log(`${LOG_PREFIX} Solicitando permiso del usuario...`);
-        const permission = await Notification.requestPermission();
-        console.log(`${LOG_PREFIX} El permiso del usuario es: ${permission}`);
-        if (permission !== 'granted') {
-            showToast('Permiso para notificaciones denegado.', true);
-            return;
-        }
+                console.log(`${LOG_PREFIX} Solicitando permiso del usuario...`);
+                const permission = await Notification.requestPermission();
+                console.log(`${LOG_PREFIX} El permiso del usuario es: ${permission}`);
+                if (permission !== 'granted') {
+                    console.warn(`${LOG_PREFIX} El usuario DENEGÓ el permiso para notificaciones.`);
+                    showToast('Permiso para notificaciones denegado.', true);
+                    return;
+                }
+                console.log(`${LOG_PREFIX} Permiso CONCEDIDO.`);
 
-        if (FCM_VAPID_KEY === "SUA_VAPID_KEY_AQUI" || !FCM_VAPID_KEY) {
-            console.error(`${LOG_PREFIX} ERROR FATAL: La VAPID key no está configurada.`);
-            showToast('Configuración de notificaciones incompleta (sin VAPID key).', true);
-            return;
-        }
-        console.log(`${LOG_PREFIX} VAPID Key encontrada.`);
+                if (FCM_VAPID_KEY === "BAgKWBzKi_Z4eyNNgGtprgPRQhPzU2MqU1vyrHf0iQSMxy1UMkin4E3GJ7KQLtChcDJHtEx8mMYau4jtzQvtjfw" || !FCM_VAPID_KEY) {
+                    console.error(`${LOG_PREFIX} ERROR FATAL: La VAPID key no está configurada o es la de ejemplo.`);
+                    showToast('Configuración de notificaciones incompleta (sin VAPID key).', true);
+                    return;
+                }
+                console.log(`${LOG_PREFIX} VAPID Key encontrada y es válida.`);
 
-        console.log(`${LOG_PREFIX} Obteniendo token de FCM... (Este paso puede tardar)`);
-        const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+                console.log(`${LOG_PREFIX} Obteniendo token de FCM... (Este paso puede tardar)`);
+                const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
 
-        if (currentToken) {
-            console.log(`${LOG_PREFIX} ¡TOKEN OBTENIDO CON ÉXITO!: ${currentToken}`);
-            if (currentClient) {
-                const existingTokens = currentClient.fcmTokens || [];
-                if (!existingTokens.includes(currentToken)) {
-                    const clientRef = doc(db, 'clients', currentClient.id);
-                    await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
-                    console.log(`${LOG_PREFIX} Token nuevo guardado en Firestore.`);
+                if (currentToken) {
+                    console.log(`${LOG_PREFIX} ¡TOKEN OBTENIDO CON ÉXITO!: ${currentToken.substring(0, 30)}...`);
+                    if (currentClient) {
+                        const existingTokens = currentClient.fcmTokens || [];
+                        if (!existingTokens.includes(currentToken)) {
+                            console.log(`${LOG_PREFIX} El token es nuevo. Intentando guardar en Firestore...`);
+                            const clientRef = doc(db, 'clients', currentClient.id);
+                            await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
+                            console.log(`${LOG_PREFIX} ¡ÉXITO! Token nuevo guardado en Firestore.`);
+                        } else {
+                            console.log(`${LOG_PREFIX} El token ya existía en Firestore. No se requiere acción.`);
+                        }
+                    } else {
+                        console.warn(`${LOG_PREFIX} Se obtuvo un token, pero 'currentClient' no está definido. No se puede guardar.`);
+                    }
                 } else {
-                    console.log(`${LOG_PREFIX} El token ya existía en Firestore.`);
+                    console.error(`${LOG_PREFIX} ERROR FATAL: No se pudo obtener el token. Causas comunes: 1) El archivo 'firebase-messaging-sw.js' no se encuentra en la raíz del sitio. 2) La VAPID key es incorrecta. 3) Problema de registro del Service Worker.`);
+                    showToast('Falha ao obter token de notificação.', true);
+                }
+
+                onMessage(messaging, (payload) => {
+                    console.log(`${LOG_PREFIX} Notificación recibida en PRIMER PLANO:`, payload);
+                    showToast(`${payload.notification.title}: ${payload.notification.body}`);
+                    const newNotif = {
+                        title: payload.notification.title, body: payload.notification.body, icon: 'bell', read: false, timestamp: new Date(), id: `fg_${Date.now()}`
+                    };
+                    const clientRef = doc(db, 'clients', currentClient.id);
+                    updateDoc(clientRef, { notifications: arrayUnion(newNotif) });
+                });
+
+                console.log(`${LOG_PREFIX} --- setupFCM finalizado con éxito ---`);
+
+            } catch (err) {
+                console.error(`${LOG_PREFIX} ERROR CATASTRÓFICO en setupFCM:`, err);
+                if (err.code === 'messaging/permission-blocked') {
+                    showToast('As notificações estão bloqueadas. Ative-as nas configurações do seu navegador.', true);
+                } else if (err.code === 'messaging/sw-registration-failed') {
+                    showToast('Falha ao registrar o serviço de notificação.', true);
+                } else {
+                    showToast('Falha ao configurar as notificações push.', true);
                 }
             }
-        } else {
-            console.error(`${LOG_PREFIX} ERROR FATAL: No se pudo obtener el token. Esto suele ocurrir si el registro del Service Worker falló. Verifica la ruta del archivo 'firebase-messaging-sw.js' y que la VAPID key sea correcta.`);
-            showToast('Falha ao obter token de notificação.', true);
         }
-
-        onMessage(messaging, (payload) => {
-            console.log(`${LOG_PREFIX} Notificación recibida en PRIMER PLANO:`, payload);
-            showToast(`${payload.notification.title}: ${payload.notification.body}`);
-            const newNotif = {
-                title: payload.notification.title, body: payload.notification.body, icon: 'bell', read: false, timestamp: new Date(), id: `fg_${Date.now()}`
-            };
-            const clientRef = doc(db, 'clients', currentClient.id);
-            updateDoc(clientRef, { notifications: arrayUnion(newNotif) });
-        });
-
-        console.log(`${LOG_PREFIX} --- setupFCM finalizado con éxito ---`);
-
-    } catch (err) {
-        console.error(`${LOG_PREFIX} ERROR CATASTRÓFICO en setupFCM:`, err);
-        if (err.code === 'messaging/permission-blocked') {
-            showToast('As notificações estão bloqueadas. Ative-as nas configurações do seu navegador.', true);
-        } else if (err.code === 'messaging/sw-registration-failed') {
-             showToast('Falha ao registrar o serviço de notificação.', true);
-        } else {
-            showToast('Falha ao configurar as notificações push.', true);
-        }
-    }
-}
-
 
         function showMainApp(clientId) {
             document.getElementById('login-view').style.display = 'none';
@@ -1201,7 +1261,6 @@ async function checkAndSendLatePaymentNotifications() {
             
             document.getElementById('app-container').style.display = 'flex';
             
-            // Exibe a view correta com base no hash inicial
             showView(location.hash.substring(1) || 'home');
 
             let isFirstLoad = true;
@@ -1209,22 +1268,21 @@ async function checkAndSendLatePaymentNotifications() {
                 if (docSnap.exists()) {
                     currentClient = { id: docSnap.id, ...docSnap.data() };
                     updateAllViews();
-                    // A verificação de notificações foi movida para ser executada apenas uma vez no carregamento e depois em um intervalo
                     if (isFirstLoad) {
-                        checkAndSendLatePaymentNotifications(); // Executa imediatamente
-                        // E depois a cada 12 horas para evitar chamadas excessivas
+                        console.log('[CLIENTE-APP] Primera carga del cliente. Iniciando verificaciones y setup de FCM.');
+                        checkAndSendLatePaymentNotifications();
                         notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 12 * 60 * 60 * 1000);
+                        console.log('[CLIENTE-APP] Verificador de notificaciones configurado para ejecutarse cada 12 horas.');
                         
-                        // [CÓDIGO CORREGIDO] Espera a que el Service Worker esté listo ANTES de configurar FCM.
                         if ('serviceWorker' in navigator) {
                             navigator.serviceWorker.ready.then(registration => {
-                                console.log('Service Worker del cliente está activo. Configurando FCM ahora.');
-                                setupFCM(); // La llamada se hace aquí, en el momento seguro.
+                                console.log('[CLIENTE-APP] Service Worker está activo. Procediendo a configurar FCM.');
+                                setupFCM();
                             }).catch(err => {
-                                console.error('El Service Worker del cliente no estuvo listo, no se pudo configurar FCM.', err);
+                                console.error('[CLIENTE-APP] ERROR: El Service Worker no estuvo listo, no se pudo configurar FCM.', err);
                             });
                         } else {
-                            console.error('Service Worker no es soportado por el navegador, no se pueden activar las notificaciones push.');
+                            console.error('[CLIENTE-APP] ERROR: Service Worker no es soportado por el navegador.');
                         }
 
                         isFirstLoad = false;
@@ -1234,13 +1292,11 @@ async function checkAndSendLatePaymentNotifications() {
                     handleLogout();
                 }
             }, (error) => {
-                console.error("Error listening to client data:", error);
+                console.error("Error catastrófico en onSnapshot del cliente:", error);
                 showToast(translations[currentLang].dataLoadError, true);
                 handleLogout();
             });
         }
-        
-        
         
         function showCropperModal(file) {
             const cropperModal = document.getElementById('cropperModal');
@@ -1543,12 +1599,12 @@ async function checkAndSendLatePaymentNotifications() {
             }
 
             const closeInstallBtn = document.getElementById('close-install-banner');
-if (closeInstallBtn) {
-    closeInstallBtn.addEventListener('click', () => {
-        const installBanner = document.getElementById('install-banner');
-        if (installBanner) installBanner.style.display = 'none';
-    });
-}
+			if (closeInstallBtn) {
+				closeInstallBtn.addEventListener('click', () => {
+					const installBanner = document.getElementById('install-banner');
+					if (installBanner) installBanner.style.display = 'none';
+				});
+			}
 
             const preferredTheme = localStorage.getItem('theme') || 'dark';
             applyTheme(preferredTheme);
