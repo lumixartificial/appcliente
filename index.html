@@ -481,6 +481,7 @@
                 <section>
                    <h2 class="section-title" data-lang-key="settings"></h2>
                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                       <a class="settings-item" id="test-push-btn" style="color: var(--accent-orange);"><i data-lucide="send"></i><span>Test Push Notification</span></a>
                        <a class="settings-item logout" id="logout-btn"><i data-lucide="log-out"></i><span data-lang-key="logout"></span></a>
                    </div>
                 </section>
@@ -1439,6 +1440,12 @@
                 }
                 if(target.closest('#logout-btn')) handleLogout();
                 
+                if(target.closest('#test-push-btn')) {
+                    console.log('[CLIENTE-APP] Botón de Test PUSH presionado. Enviando notificación de prueba...');
+                    sendNotificationTicket('Notificación de Prueba', 'Si recibes esto, ¡las notificaciones PUSH funcionan!', 'test', 'check-circle');
+                    showToast('Notificación de prueba enviada. Pon la app en segundo plano para verla.');
+                }
+                
                 if(target.closest('#clear-notifications-btn')) {
                     handleClearNotifications();
                 }
@@ -1646,3 +1653,4 @@
     </script>
 </body>
 </html>
+
