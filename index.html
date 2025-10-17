@@ -44,10 +44,9 @@
             padding: 0;
             overflow: hidden; 
             width: 100%;
-            /* Las siguientes líneas aseguran que la app ocupe realmente toda la altura de la pantalla en dispositivos móviles */
-            height: 100%; /* Fallback para navegadores muy antiguos */
-            height: -webkit-fill-available; /* Compatibilidad con Safari en iOS */
-            height: 100dvh; /* Estándar moderno para la altura dinámica del viewport */
+            height: 100%; 
+            height: -webkit-fill-available;
+            height: 100dvh;
         }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-primary); transition: background-color 0.3s, color 0.3s; }
         
@@ -171,7 +170,6 @@
             left: 0;
             right: 0;
             bottom: 0;
-            /* Refuerzo para asegurar que el contenedor principal también ocupe toda la altura */
             height: 100%;
             height: -webkit-fill-available;
             height: 100dvh;
@@ -209,7 +207,7 @@
         .section-title { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; color: var(--text-primary); }
         .kpi-grid {
             display: grid;
-            grid-template-columns: 1fr; /* Força uma única coluna, empilhando os itens */
+            grid-template-columns: 1fr;
             gap: 15px;
             margin-bottom: 25px;
         }
@@ -217,10 +215,10 @@
         body.dark-mode .kpi-card { box-shadow: none; }
         .kpi-title { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-secondary); margin: 0 0 10px; }
         .kpi-value {
-            font-size: 1.5rem; /* Tamanho do texto reduzido ainda mais */
+            font-size: 1.5rem;
             font-weight: 700;
             margin: 0;
-            white-space: nowrap; /* Impede que o valor quebre a linha */
+            white-space: nowrap;
         }
         .kpi-value.green { color: var(--accent-green); }
         .kpi-value.purple { color: var(--accent-purple); }
@@ -529,8 +527,12 @@
         let receiptFile = null;
         let notificationInterval;
 
-        const PIX_KEY_FIXED = "000.0.000-00"; // Substitua pela sua chave PIX
-        const PIX_KEY_MANUAL = "chave-manual@email.com"; // Substitua pela sua chave PIX
+        const PIX_KEY_FIXED = "000.0.000-00";
+        const PIX_KEY_MANUAL = "chave-manual@email.com";
+        
+        // ¡¡¡ ACCIÓN REQUERIDA !!!
+        // Reemplaza la siguiente clave con tu "Public VAPID key" real desde:
+        // Firebase Console -> Project Settings -> Cloud Messaging -> Web configuration -> Key pair
         const FCM_VAPID_KEY = "BAgKWBzKi_Z4eyNNgGtprgPRQhPzU2MqU1vyrHf0iQSMxy1UMkin4E3GJ7KQLtChcDJHtEx8mMYau4jtzQvtjfw"; // IMPORTANTE: Substitua pela sua VAPID key do Firebase Cloud Messaging
 
         const translations = {
@@ -677,6 +679,27 @@
                 urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda.'
             }
         };
+
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (isError) {
+                toast.classList.add('toast-error');
+            }
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
 
         function money(value) {
             return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -972,8 +995,7 @@
                     `}
                 </div>
             `;
-
-            // Use the outer scope to apply language and icons
+            
             document.querySelectorAll('[data-lang-key]').forEach(el => {
                 const key = el.dataset.langKey;
                 if (translations[currentLang] && translations[currentLang][key]) {
@@ -990,7 +1012,7 @@
                 const calculateNewLoan = () => {
                     const amount = parseFloat(amountInput.value) || 0;
                     const installments = parseInt(installmentsInput.value) || 0;
-                    const interestRate = currentClient.interestRate || 20; // Use client's current rate
+                    const interestRate = currentClient.interestRate || 20;
 
                     if (amount > 0 && installments > 0) {
                         const totalToPay = amount * (1 + (interestRate / 100));
@@ -1129,7 +1151,7 @@
                 } else {
                     const clientDoc = querySnapshot.docs[0];
                     sessionStorage.setItem('lumixClientId', clientDoc.id);
-                    location.hash = 'home'; // Define a view inicial no login
+                    location.hash = 'home';
                     showMainApp(clientDoc.id);
                 }
             } catch (error) {
@@ -1145,12 +1167,12 @@
             if (unsubscribeClient) {
                 unsubscribeClient();
             }
-            if (notificationInterval) clearInterval(notificationInterval); // Limpa o intervalo ao sair
+            if (notificationInterval) clearInterval(notificationInterval);
             sessionStorage.removeItem('lumixClientId');
             currentClient = null;
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
-            history.replaceState(null, '', window.location.pathname); // Limpa o hash
+            history.replaceState(null, '', window.location.pathname);
         }
 
         function updateAllViews() {
@@ -1365,7 +1387,7 @@
         function copyToClipboard(text, message) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
-            textArea.style.position = 'fixed'; // Prevent scrolling to bottom of page in MS Edge.
+            textArea.style.position = 'fixed';
             textArea.style.left = '-9999px';
             document.body.appendChild(textArea);
             textArea.focus();
@@ -1413,7 +1435,6 @@
                 const navItem = target.closest('.nav-item');
                 if (navItem) {
                     const targetView = navItem.dataset.view;
-                    // Altera o hash para navegar, o que aciona o 'popstate'
                     location.hash = targetView;
                 }
                 if(target.closest('#logout-btn')) handleLogout();
@@ -1464,7 +1485,6 @@
         async function sendNotificationToCollector(title, body, type = 'payment') {
             if (!currentClient || !currentClient.collectorId) return;
             try {
-                // MÉTODO CORRECTO Y ÚNICO: Crear un "ticket" de notificación.
                 const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
                 await addDoc(notificationsCollectionRef, {
                     title: title,
@@ -1520,7 +1540,7 @@
 
                 showToast(translations[currentLang].receiptSent);
                 sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
-                // Reset form
+                
                 receiptFile = null;
                 document.getElementById('receipt-file-input').value = '';
                 document.getElementById('receipt-preview').style.display = 'none';
@@ -1530,7 +1550,6 @@
                 
                 button.innerHTML = originalButtonHTML;
                 
-                // Navigate after all operations are complete
                 document.querySelector('.nav-item[data-view="home"]').click();
 
              } catch(error) {
@@ -1551,11 +1570,7 @@
         }
 
         function init() {
-            // PWA Manifest and Service Worker Setup
-            // REGISTRO DEL SERVICE WORKER FÍSICO
             if ('serviceWorker' in navigator) {
-              // Los Service Workers requieren un contexto seguro (HTTPS) o ser localhost para funcionar.
-              // Esta verificación previene errores en entornos de previsualización que no son HTTPS.
               if (location.protocol === 'https:' || location.hostname === 'localhost') {
                 navigator.serviceWorker.register('firebase-messaging-sw.js')
                   .then(function(registration) {
@@ -1568,9 +1583,7 @@
               }
             }
 
-            // Adiciona o listener para o botão "voltar"
             window.addEventListener('popstate', () => {
-                // Apenas navega se o usuário estiver logado
                 if (currentClient) {
                     const viewName = location.hash.substring(1) || 'home';
                     showView(viewName);
