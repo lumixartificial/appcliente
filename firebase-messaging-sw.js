@@ -1,4 +1,4 @@
-const SW_VERSION = "v7.0-cliente";
+const SW_VERSION = "v8.0-cliente-homologado";
 
 // Importa los scripts de Firebase en formato compatibilidad, igual que en el SW del cobrador.
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
@@ -98,4 +98,3 @@ self.addEventListener('notificationclick', (event) => {
     });
     event.waitUntil(promiseChain);
 });
-
