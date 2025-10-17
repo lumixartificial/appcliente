@@ -1218,8 +1218,8 @@
                 }
                 console.log(`${LOG_PREFIX} Permiso CONCEDIDO.`);
 
-                if (FCM_VAPID_KEY === "BAgKWBzKi_Z4eyNNgGtprgPRQhPzU2MqU1vyrHf0iQSMxy1UMkin4E3GJ7KQLtChcDJHtEx8mMYau4jtzQvtjfw" || !FCM_VAPID_KEY) {
-                    console.error(`${LOG_PREFIX} ERROR FATAL: La VAPID key no está configurada o es la de ejemplo.`);
+                if (!FCM_VAPID_KEY) {
+                    console.error(`${LOG_PREFIX} ERROR FATAL: La VAPID key no está configurada.`);
                     showToast('Configuración de notificaciones incompleta (sin VAPID key).', true);
                     return;
                 }
