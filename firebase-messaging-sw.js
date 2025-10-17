@@ -11,64 +11,51 @@ const firebaseConfig = {
     appId: "1:463777495321:web:106118f53f56abd206ed88"
 };
 
-// Se inicializa Firebase
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
+const LOG_PREFIX = `[SW-CLIENTE-DIAGNOSTICO]`;
 
-console.log(`[SW-CLIENTE v6.0] Service Worker del Cliente cargado y listo.`);
+console.log(`${LOG_PREFIX} Service Worker v7.0 cargado y Firebase inicializado.`);
 
-/**
- * Este listener AHORA SÍ se ejecutará porque la Cloud Function enviará un mensaje de 'data'.
- */
 messaging.onBackgroundMessage((payload) => {
-  const LOG_PREFIX = `[SW-CLIENTE v6.0]`;
-  console.log(`${LOG_PREFIX} >>> MENSAJE DE DATOS RECIBIDO <<<`, payload);
+  console.log(`${LOG_PREFIX} >>> MENSAJE RECIBIDO EN SEGUNDO PLANO <<<`, payload);
 
-  // Verificación clave: El payload debe contener la sección 'data'
   if (!payload.data) {
-    console.error(`${LOG_PREFIX} ERROR: El payload no contiene la sección 'data'.`, payload);
+    console.error(`${LOG_PREFIX} ERROR: El payload recibido NO contiene la sección 'data'. No se puede mostrar la notificación. Payload:`, payload);
     return;
   }
+  console.log(`${LOG_PREFIX} La sección 'data' fue encontrada en el payload.`);
 
-  // --- CORRECCIÓN CLAVE ---
-  // Ahora leemos los datos directamente del objeto 'data' que envía la Cloud Function.
   const notificationTitle = payload.data.title;
   const notificationOptions = {
     body: payload.data.body,
     icon: payload.data.icon,
-    tag: payload.data.tag, // Usamos el 'tag' para agrupar notificaciones
-    // La 'data' aquí es para que el evento 'notificationclick' sepa a dónde ir.
+    tag: payload.data.tag,
     data: {
-      url: payload.data.link // El link viene dentro de 'data'
+      url: payload.data.link
     }
   };
 
-  console.log(`${LOG_PREFIX} Mostrando notificación:`, notificationTitle, notificationOptions);
+  console.log(`${LOG_PREFIX} Preparando para mostrar notificación con Título: [${notificationTitle}] y Opciones:`, notificationOptions);
   
-  // Muestra la notificación al usuario
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-/**
- * Esto se ejecuta cuando el usuario hace clic en la notificación. No necesita cambios.
- */
 self.addEventListener('notificationclick', (event) => {
-    console.log(`[SW-CLIENTE v6.0] Clic en notificación recibido.`);
-    event.notification.close(); // Cierra la notificación
+    console.log(`${LOG_PREFIX} El usuario hizo CLIC en la notificación.`);
+    event.notification.close();
+    console.log(`${LOG_PREFIX} Notificación cerrada. Intentando abrir URL: [${event.notification.data.url}]`);
 
-    // Abre la URL que se guardó en la 'data' de la notificación
-    // Esto enfocará la PWA si ya está abierta o la abrirá en una nueva pestaña.
     const promiseChain = clients.openWindow(event.notification.data.url);
     event.waitUntil(promiseChain);
 });
 
-// El ciclo de vida del Service Worker es correcto, asegura que siempre esté actualizado.
 self.addEventListener('install', (event) => {
-  console.log(`[SW-CLIENTE v6.0] Instalando...`);
+  console.log(`${LOG_PREFIX} Evento 'install' disparado. Forzando activación con skipWaiting().`);
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  console.log(`[SW-CLIENTE v6.0] Activado.`);
+  console.log(`${LOG_PREFIX} Evento 'activate' disparado. Tomando control de los clientes.`);
   event.waitUntil(self.clients.claim());
 });
