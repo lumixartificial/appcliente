@@ -67,21 +67,24 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('notificationclick', (event) => {
-    console.log(`[SW-CLIENTE ${SW_VERSION}] Clic en notificación detectado.`);
+    const targetUrl = event.notification.data.url || self.location.origin;
+    console.log(`[SW-CLIENTE] Clic en notificación. URL de destino: ${targetUrl}`);
     event.notification.close();
 
-    const targetUrl = event.notification.data.url || self.location.origin;
+    // Lógica idéntica a la del cobrador para un comportamiento consistente y robusto.
+    const promiseChain = clients.matchAll({
+        type: "window",
+        includeUncontrolled: true
+    }).then((clientList) => {
+        if (clientList.length > 0) {
+            const client = clientList[0];
+            console.log('[SW-CLIENTE] Ventana existente encontrada. Navegando y enfocando.');
+            return client.navigate(targetUrl).then(c => c.focus());
+        }
 
-    const promiseChain = clients.matchAll({ type: 'window', includeUncontrolled: true })
-    .then((windowClients) => {
-        for (const client of windowClients) {
-            if (new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client) {
-                return client.navigate(targetUrl).then(c => c.focus());
-            }
-        }
-        if (clients.openWindow) {
-            return clients.openWindow(targetUrl);
-        }
+        console.log('[SW-CLIENTE] Ninguna ventana abierta. Abriendo una nueva.');
+        return clients.openWindow(targetUrl);
     });
+
     event.waitUntil(promiseChain);
 });
