@@ -1,4 +1,4 @@
-const SW_VERSION = "v9.0-revisado"; // Versión actualizada
+const SW_VERSION = "v9.1-robusto"; // Versión actualizada
 
 // Importa los scripts de Firebase.
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
@@ -36,8 +36,9 @@ messaging.onBackgroundMessage((payload) => {
             body: payload.data.body,
             icon: payload.data.icon || 'https://res.cloudinary.com/dc6as14p0/image/upload/v1759873183/LOGO_LUMIX_REDUCI_czkw4p.png',
             tag: 'lumix-cliente-notification',
+            // [CORRECCIÓN] Usar la URL directamente desde el payload enviado por la Cloud Function.
             data: {
-                url: self.location.origin + '/#notifications' 
+                url: payload.data.url
             }
         };
         console.log(`${LOG_PREFIX} Opciones de notificación preparadas:`, notificationOptions);
@@ -66,22 +67,32 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
 
+// [SOLUCIÓN DEFINITIVA] Lógica de clic de notificación mejorada y robusta.
 self.addEventListener('notificationclick', (event) => {
     const targetUrl = event.notification.data.url || self.location.origin;
     console.log(`[SW-CLIENTE] Clic en notificación. URL de destino: ${targetUrl}`);
     event.notification.close();
 
-    // Lógica idéntica a la del cobrador para un comportamiento consistente y robusto.
+    // Esta lógica busca una ventana existente, la navega a la URL correcta y la enfoca.
+    // Si no encuentra ninguna, abre una nueva. Es el método más fiable.
     const promiseChain = clients.matchAll({
         type: "window",
         includeUncontrolled: true
     }).then((clientList) => {
+        // Busca una ventana que ya esté visible para priorizarla.
+        for (const client of clientList) {
+            if (client.url === targetUrl && 'focus' in client) {
+                return client.focus();
+            }
+        }
+        // Si no hay una ventana visible en la URL correcta, o ninguna es visible,
+        // toma la primera disponible y la navega/enfoca.
         if (clientList.length > 0) {
-            const client = clientList[0];
-            console.log('[SW-CLIENTE] Ventana existente encontrada. Navegando y enfocando.');
-            return client.navigate(targetUrl).then(c => c.focus());
+            console.log('[SW-CLIENTE] Ventana en segundo plano encontrada. Navegando y enfocando.');
+            return clientList[0].navigate(targetUrl).then(client => client.focus());
         }
 
+        // Si no hay ninguna ventana abierta de la app, abre una nueva.
         console.log('[SW-CLIENTE] Ninguna ventana abierta. Abriendo una nueva.');
         return clients.openWindow(targetUrl);
     });
