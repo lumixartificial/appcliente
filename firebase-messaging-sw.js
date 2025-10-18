@@ -1,4 +1,4 @@
-const SW_VERSION = "v9.3-definitivo"; // Versión actualizada
+const SW_VERSION = "v9.4-robusto"; // Versión actualizada
 
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
@@ -32,36 +32,45 @@ messaging.onBackgroundMessage((payload) => {
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// [SOLUCIÓN DEFINITIVA] Combinamos skipWaiting con una activación controlada.
 self.addEventListener('install', (event) => {
   console.log(`[SW-CLIENTE ${SW_VERSION}] Instalando y forzando activación inmediata.`);
-  event.waitUntil(self.skipWaiting()); // Fuerza al nuevo SW a activarse tan pronto como se instale.
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   console.log(`[SW-CLIENTE ${SW_VERSION}] Activado y tomando control.`);
-  // Tomará el control de todas las páginas abiertas.
   event.waitUntil(self.clients.claim());
 });
 
+// [SOLUCIÓN ROBUSTA Y DEFINITIVA]
 self.addEventListener('notificationclick', (event) => {
     const targetUrl = event.notification.data.url || self.location.origin;
     event.notification.close();
 
-    // Lógica simplificada y más directa para abrir o enfocar la ventana.
-    event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true })
-        .then((windowClients) => {
-            // 1. Si encuentra una ventana que coincida con la URL, la enfoca.
-            for (const client of windowClients) {
-                if (client.url === targetUrl && 'focus' in client) {
-                    return client.focus();
-                }
-            }
-            // 2. Si no encuentra ninguna coincidencia, abre una ventana nueva.
-            if (clients.openWindow) {
-                return clients.openWindow(targetUrl);
-            }
-        })
-    );
+    // Esta es la lógica más fiable para abrir/enfocar la app.
+    const promiseChain = clients.matchAll({
+        type: "window",
+        includeUncontrolled: true
+    }).then((windowClients) => {
+        // Busca si ya hay una ventana abierta con la misma URL.
+        const existingClient = windowClients.find(client => client.url === targetUrl && 'focus' in client);
+
+        if (existingClient) {
+            console.log('[SW-CLIENTE] Ventana existente encontrada. Enfocando...');
+            return existingClient.focus();
+        }
+
+        // Si no hay una ventana con la URL exacta, pero hay alguna ventana de la app abierta (incluso en segundo plano)...
+        if (windowClients.length > 0) {
+            console.log('[SW-CLIENTE] Otra ventana de la app está abierta. Navegando y enfocando...');
+            // La navega a la URL correcta, lo que la trae al frente, y luego la enfoca.
+            return windowClients[0].navigate(targetUrl).then(client => client.focus());
+        }
+        
+        // Si no hay ninguna ventana abierta, abre una nueva.
+        console.log('[SW-CLIENTE] Ninguna ventana abierta. Abriendo una nueva.');
+        return clients.openWindow(targetUrl);
+    });
+
+    event.waitUntil(promiseChain);
 });
