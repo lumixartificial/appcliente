@@ -1049,6 +1049,23 @@
             }
         }
 
+        function showView(viewName) {
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.classList.remove('active'));
+            const activeView = document.getElementById(`${viewName}-view`);
+            if (activeView) activeView.classList.add('active');
+
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            const activeNavItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
+            if (activeNavItem) activeNavItem.classList.add('active');
+
+            // Carga datos específicos de la vista si es necesario
+            if (viewName === 'refinance' && currentClient) {
+                updateRefinanceView();
+            }
+        }
+
         function updateDashboardView() {
             if (!currentClient || !document.getElementById('home-view') || !currentClient.loans || currentClient.loans.length === 0) return;
             
@@ -1159,260 +1176,39 @@
         }
 
         function updateProfileView() {
-            if (!currentClient || !document.getElementById('profile-view')) return;
+            if (!currentClient) return;
+            const profileView = document.getElementById('profile-view');
+
             const nameInitial = (currentClient.name || 'C').charAt(0).toUpperCase();
-            const placeholderUrl = `https://placehold.co/100x100/6f42c1/FFFFFF?text=${nameInitial}`;
-            
-            document.getElementById('profile-view-img').src = currentClient.profilePictureUrl || placeholderUrl;
-            document.getElementById('profile-view-name').textContent = currentClient.name;
-        }
+            const placeholderUrl = `https://placehold.co/120x120/6f42c1/FFFFFF?text=${nameInitial}`;
+            const photoUrl = currentClient.profilePictureUrl || placeholderUrl;
 
-        function updatePayView() {
-            if(!currentClient || !document.getElementById('pay-view') || !currentClient.loans || currentClient.loans.length === 0) return;
-            
-            const currentLoan = currentClient.loans[selectedLoanIndex];
-            if (!currentLoan) return;
-
-            const amountDueNow = Math.max(0, (currentLoan.originalInstallmentAmount || 0) - (currentLoan.paymentBalance || 0));
-            document.getElementById('receipt-amount').value = amountDueNow > 0 ? amountDueNow.toFixed(2) : '';
-            document.getElementById('receipt-amount').placeholder = money(amountDueNow);
-
-
-            const transactionId = "***"; 
-            const payload = `00020126580014br.gov.bcb.pix0114${PIX_KEY_FIXED}520400005303986540${amountDueNow.toFixed(2)}5802BR5913${currentClient.name.split(' ')[0]}6009SAO PAULO62070503***6304EF2E`;
-            document.getElementById('pix-copy-paste-code').value = payload;
-            document.getElementById('pix-qr-code').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
-            
-            document.getElementById('manual-pix-key-value').textContent = PIX_KEY_MANUAL;
-        }
-
-        function updateRefinanceView() {
-            if (!currentClient || !document.getElementById('refinance-view') || !currentClient.loans || currentClient.loans.length === 0) return;
-
-            const refinanceView = document.getElementById('refinance-view');
-            const currentLoan = currentClient.loans[selectedLoanIndex];
-            if (!currentLoan) return;
-            
-            const lateDays = calculateLatePaymentDays(currentLoan);
-            const score = Math.max(0, 10 - lateDays);
-            const isEligible = score === 10;
-            
-            let reputationStatusKey = 'reputationBad';
-            if (score === 10) reputationStatusKey = 'reputationPerfect';
-            else if (score >= 7) reputationStatusKey = 'reputationGood';
-            else if (score >= 3) reputationStatusKey = 'reputationRegular';
-
-            let barStatusClass = 'status-bad';
-            if (score === 10) barStatusClass = 'status-perfect';
-            else if (score >= 7) barStatusClass = 'status-good';
-            else if (score >= 3) barStatusClass = 'status-regular';
-
-            refinanceView.innerHTML = `
-                <h2 class="section-title" data-lang-key="refinanceTitle"></h2>
+            profileView.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 30px;">
+                    <label for="profile-pic-input" class="profile-pic-wrapper">
+                        <img id="profile-view-img" src="${photoUrl}" alt="Foto do Cliente">
+                    </label>
+                    <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                    <h2 style="margin: 15px 0 0; font-size: 1.5em;">${currentClient.name}</h2>
+                    <p style="margin: 5px 0 0; color: var(--text-secondary);">${currentClient.username}</p>
+                </div>
                 
-                <div class="kpi-card reputation-card" style="margin-bottom: 20px;">
-                   <h3 class="kpi-title" data-lang-key="reputationScore"></h3>
-                   <div class="reputation-bar-container">
-                       <div id="refinance-reputation-bar" class="reputation-bar ${barStatusClass}" style="width: ${score * 10}%"></div>
-                   </div>
-                   <div class="reputation-status">
-                       <span id="refinance-reputation-value" class="reputation-value">${score} / 10</span>
-                       <span id="refinance-reputation-text" class="reputation-text ${barStatusClass}" data-lang-key="${reputationStatusKey}"></span>
-                   </div>
-                </div>
-
-                <div class="kpi-card">
-                    ${isEligible ? `
-                        <h3 class="kpi-title" data-lang-key="requestNewFinancing"></h3>
-                        <form id="refinance-form">
-                            <div class="form-group">
-                                <label data-lang-key="newAmount"></label>
-                                <input type="number" id="ref-amount" class="form-control" step="100">
-                            </div>
-                            <div class="form-group">
-                                <label data-lang-key="newInstallments"></label>
-                                <input type="number" id="ref-installments" class="form-control">
-                            </div>
-                            <div id="ref-summary" style="margin-top: 15px;"></div>
-                            <button type="submit" class="btn-primary" style="width:100%; margin-top:15px;"><i data-lucide="send"></i> <span data-lang-key="sendForAnalysis"></span></button>
-                        </form>
-                    ` : `
-                        <h3 class="kpi-title" data-lang-key="reputationNotGoodTitle"></h3>
-                        <p style="color: var(--text-secondary); text-align: center; line-height: 1.6;">
-                            <i data-lucide="info" style="width: 40px; height: 40px; margin-bottom: 10px;"></i><br>
-                            <span data-lang-key="reputationNotGoodMsg"></span>
-                        </p>
-                    `}
-                </div>
+                <section>
+                    <h2 class="section-title" data-lang-key="accountSettings"></h2>
+                    <div class="settings-list">
+                        <a class="settings-item logout" id="logout-btn">
+                            <i data-lucide="log-out"></i><span data-lang-key="logout"></span>
+                        </a>
+                    </div>
+                </section>
             `;
-            
-            document.querySelectorAll('[data-lang-key]').forEach(el => {
-                const key = el.dataset.langKey;
-                if (translations[currentLang] && translations[currentLang][key]) {
-                    el.textContent = translations[currentLang][key];
-                }
-            });
-            lucide.createIcons({nodes: refinanceView.querySelectorAll('[data-lucide]')});
 
-            if (isEligible) {
-                const amountInput = document.getElementById('ref-amount');
-                const installmentsInput = document.getElementById('ref-installments');
-                const summaryDiv = document.getElementById('ref-summary');
+            lucide.createIcons({ nodes: profileView.querySelectorAll('[data-lucide]') });
+            applyLanguage(currentLang);
 
-                const calculateNewLoan = () => {
-                    const amount = parseFloat(amountInput.value) || 0;
-                    const installments = parseInt(installmentsInput.value) || 0;
-                    const interestRate = currentClient.interestRate || 20;
-
-                    if (amount > 0 && installments > 0) {
-                        const totalToPay = amount * (1 + (interestRate / 100));
-                        const installmentValue = totalToPay / installments;
-                        summaryDiv.innerHTML = `
-                            <p style="margin: 5px 0;"><strong>Total a Pagar:</strong> ${money(totalToPay)}</p>
-                            <p style="margin: 5px 0;"><strong>Valor da Parcela:</strong> ${money(installmentValue)}</p>
-                        `;
-                    } else {
-                        summaryDiv.innerHTML = '';
-                    }
-                };
-
-                amountInput.addEventListener('input', calculateNewLoan);
-                installmentsInput.addEventListener('input', calculateNewLoan);
-                
-                document.getElementById('refinance-form').addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const submitButton = e.currentTarget.querySelector('button[type="submit"]');
-                    const amount = parseFloat(amountInput.value);
-                    const installments = parseInt(installmentsInput.value);
-
-                    if (!amount || !installments || amount <= 0 || installments <= 0) {
-                        showToast('Por favor, preencha os valores.', true);
-                        return;
-                    }
-                    
-                    submitButton.disabled = true;
-                    submitButton.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i> Enviando...`;
-                    lucide.createIcons({nodes: [submitButton.querySelector('i')]});
-
-                    try {
-                        const clientRef = doc(db, 'clients', currentClient.id);
-                        await updateDoc(clientRef, {
-                            refinanceRequest: {
-                                amount: amount,
-                                installments: installments,
-                                requestDate: new Date(),
-                                status: 'pending'
-                            }
-                        });
-
-                        showToast(translations[currentLang].analysisSent);
-                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
-                        amountInput.value = '';
-                        installmentsInput.value = '';
-                        summaryDiv.innerHTML = '';
-                    
-                    } catch (error) {
-                        console.error("Error sending refinance request:", error);
-                        showToast(translations[currentLang].genericError, true);
-                    } finally {
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = `<i data-lucide="send"></i> <span data-lang-key="sendForAnalysis">${translations[currentLang].sendForAnalysis}</span>`;
-                        lucide.createIcons({nodes: [submitButton.querySelector('i')]});
-                    }
-                });
-            }
-        }
-        
-        function updateNotificationsView() {
-            if (!currentClient || !document.getElementById('notifications-view')) return;
-            const listEl = document.getElementById('notifications-list');
-            const notifications = currentClient.notifications || [];
-            
-            let unreadCount = 0;
-            
-            if (notifications.length === 0) {
-                listEl.innerHTML = `<p class="no-notifications" data-lang-key="noNotifications">${translations[currentLang].noNotifications}</p>`;
-            } else {
-                listEl.innerHTML = [...notifications]
-                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
-                    .map((notif, index) => {
-                        const notifId = notif.id || `notif_${index}`;
-                        if (!notif.read) unreadCount++;
-                        const dateString = notif.timestamp?.seconds ? new Date(notif.timestamp.seconds * 1000).toLocaleString(currentLang, { dateStyle: 'short', timeStyle: 'short'}) : '';
-                        const icon = notif.icon || 'info';
-                        
-                        return `
-                        <div class="notification-item ${!notif.read ? 'unread' : ''}" data-id="${notifId}">
-                            <div class="notification-icon"><i data-lucide="${icon}"></i></div>
-                            <div class="notification-content">
-                                <h4 class="notification-title">${notif.title}</h4>
-                                <p class="notification-body">${notif.body}</p>
-                                ${dateString ? `<div class="notification-date">${dateString}</div>` : ''}
-                            </div>
-                        </div>`;
-                    }).join('');
-                lucide.createIcons({nodes: listEl.querySelectorAll('[data-lucide]')});
-            }
-
-            const badges = document.querySelectorAll('.notification-badge');
-            badges.forEach(badge => {
-                if (unreadCount > 0) {
-                    badge.style.display = 'block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            });
-        }
-        
-        function showView(viewName) {
-            const appContainer = document.getElementById('app-container');
-            if (!appContainer) return;
-
-            appContainer.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-            appContainer.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-
-            const targetViewEl = document.getElementById(`${viewName}-view`);
-            const targetNavItem = appContainer.querySelector(`.nav-item[data-view="${viewName}"]`);
-
-            if (targetViewEl) targetViewEl.classList.add('active');
-            if (targetNavItem) targetNavItem.classList.add('active');
-
-            if (viewName === 'refinance') {
-                updateRefinanceView();
-            }
+            profileView.querySelector('#logout-btn').addEventListener('click', handleLogout);
         }
 
-        async function handleLogin(event) {
-            event.preventDefault();
-            const submitButton = event.target.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
-            lucide.createIcons({nodes: [submitButton.querySelector('i')]});
-
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const q = query(collection(db, "clients"), where("username", "==", username), where("password", "==", password));
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    showToast(translations[currentLang].invalidCredentials, true);
-                } else {
-                    const clientDoc = querySnapshot.docs[0];
-                    sessionStorage.setItem('lumixClientId', clientDoc.id);
-                    location.hash = 'home';
-                    showMainApp(clientDoc.id);
-                }
-            } catch (error) {
-                console.error("Login error:", error);
-                showToast(translations[currentLang].genericError, true);
-            } finally {
-                submitButton.disabled = false;
-                submitButton.innerHTML = `<span data-lang-key="loginBtn">${translations[currentLang].loginBtn}</span>`;
-            }
-        }
-        
         function handleLogout() {
             if (unsubscribeClient) {
                 unsubscribeClient();
@@ -1423,6 +1219,106 @@
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
             // history.replaceState(null, '', window.location.pathname); // [CORRECCIÓN] Se elimina esta línea para evitar el SecurityError en el entorno de vista previa.
+        }
+
+        function updatePayView() {
+            if (!currentClient || !document.getElementById('pay-view')) return;
+
+            const qrCodeEl = document.getElementById('pix-qr-code');
+            const copyPasteEl = document.getElementById('pix-copy-paste-code');
+            const manualKeyEl = document.getElementById('manual-pix-key-value');
+            
+            // Lógica para generar el código PIX Copia y Pega (BR Code)
+            // Esta es una versión simplificada. Para una implementación real se necesitaría una librería.
+            const payload = `00020126580014br.gov.bcb.pix0136${PIX_KEY_FIXED}520400005303986540550.005802BR5913LUMIX FINANCAS6009SAO PAULO62070503***6304E7DF`;
+            
+            copyPasteEl.value = payload;
+            manualKeyEl.textContent = PIX_KEY_MANUAL;
+            
+            // Generar QR Code (usando una API externa para simplicidad)
+            qrCodeEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
+        }
+
+        function updateRefinanceView() {
+            if (!currentClient || !document.getElementById('refinance-view')) return;
+            const container = document.getElementById('refinance-view');
+            const currentLoan = currentClient.loans[selectedLoanIndex];
+            if (!currentLoan) return;
+
+            const lateDays = calculateLatePaymentDays(currentLoan);
+            const score = Math.max(0, 10 - lateDays);
+            let content = '';
+
+            if (currentClient.refinanceRequest) {
+                content = `<div class="container kpi-card"><h2 class="section-title" data-lang-key="refinanceTitle"></h2><p>${translations[currentLang].analysisSent}</p></div>`;
+            } else if (score === 10) {
+                content = `<div class="container"><h2 class="section-title" data-lang-key="refinanceTitle"></h2><div class="kpi-card"><form id="refinance-form"><div class="form-group"><label for="refinance-amount" data-lang-key="newAmount"></label><input type="number" id="refinance-amount" class="form-control" required></div><div class="form-group"><label for="refinance-installments" data-lang-key="newInstallments"></label><input type="number" id="refinance-installments" class="form-control" required></div><button type="submit" class="btn-primary" style="width:100%;"><span data-lang-key="sendForAnalysis"></span></button></form></div></div>`;
+            } else {
+                content = `<div class="container kpi-card"><h2 class="section-title" data-lang-key="reputationNotGoodTitle"></h2><p>${translations[currentLang].reputationNotGoodMsg}</p></div>`;
+            }
+            container.innerHTML = content;
+            applyLanguage(currentLang);
+            
+            const form = document.getElementById('refinance-form');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const amount = parseFloat(document.getElementById('refinance-amount').value);
+                    const installments = parseInt(document.getElementById('refinance-installments').value, 10);
+                    if (isNaN(amount) || amount <= 0 || isNaN(installments) || installments <= 0) {
+                        showToast(translations[currentLang].invalidAmount, true);
+                        return;
+                    }
+                    try {
+                        const clientRef = doc(db, 'clients', currentClient.id);
+                        await updateDoc(clientRef, { refinanceRequest: { amount: amount, installments: installments, requestDate: new Date() } });
+                        showToast(translations[currentLang].analysisSent);
+                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
+                        updateRefinanceView();
+                    } catch (error) {
+                        console.error("Error sending refinance request:", error);
+                        showToast(translations[currentLang].genericError, true);
+                    }
+                });
+            }
+        }
+
+        function updateNotificationsView() {
+            if (!currentClient || !document.getElementById('notifications-list')) return;
+
+            const listContainer = document.getElementById('notifications-list');
+            const notifications = currentClient.notifications || [];
+            const unreadCount = notifications.filter(n => !n.read).length;
+            
+            const badge = document.querySelector('.nav-item[data-view="notifications"] .notification-badge');
+            if (badge) {
+                badge.style.display = unreadCount > 0 ? 'block' : 'none';
+            }
+            
+            if (notifications.length === 0) {
+                listContainer.innerHTML = `<p class="no-notifications" data-lang-key="noNotifications">${translations[currentLang].noNotifications}</p>`;
+                return;
+            }
+            
+            listContainer.innerHTML = [...notifications].reverse().map((n, index) => {
+                const d = n.timestamp.toDate();
+                const dateString = d.toLocaleString(currentLang, { dateStyle: 'medium', timeStyle: 'short' });
+                const isUnread = n.read === false;
+                const notifId = n.id || `notif_${notifications.length - 1 - index}`; 
+                
+                return `
+                    <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${notifId}">
+                        <div class="notification-icon"><i data-lucide="${n.icon || 'info'}"></i></div>
+                        <div class="notification-content">
+                            <h4 class="notification-title">${n.title}</h4>
+                            <p class="notification-body">${n.body}</p>
+                            <p class="notification-date">${dateString}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            lucide.createIcons({ nodes: listContainer.querySelectorAll('[data-lucide]') });
         }
 
         function updateAllViews() {
@@ -1895,6 +1791,38 @@
             if(headerLogo) headerLogo.src = companyLogo;
         }
 
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const loginBtn = document.querySelector('#login-form button');
+            const originalBtnHTML = loginBtn.innerHTML;
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+            lucide.createIcons({nodes: [loginBtn.querySelector('i')]});
+
+            try {
+                const q = query(collection(db, "clients"), where("username", "==", username), where("password", "==", password));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    showToast(translations[currentLang].invalidCredentials, true);
+                } else {
+                    const clientDoc = querySnapshot.docs[0];
+                    sessionStorage.setItem('lumixClientId', clientDoc.id);
+                    document.getElementById('login-form').removeEventListener('submit', handleLogin);
+                    showMainApp(clientDoc.id);
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                showToast(translations[currentLang].genericError, true);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = originalBtnHTML;
+                applyLanguage(currentLang);
+            }
+        }
+
         function init() {
             if ('serviceWorker' in navigator) {
               if (location.protocol === 'https:' || location.hostname === 'localhost') {
@@ -1972,3 +1900,4 @@
     </script>
 </body>
 </html>
+
