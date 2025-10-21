@@ -1550,7 +1550,8 @@
                         amount: amount,
                         date: new Date(),
                         receiptUrl: data.secure_url,
-                        status: 'pending_verification'
+                        status: 'pending_verification',
+                        dueAmount: currentClient.amount // Añadido para registrar el valor adeudado al momento del envío
                     })
                 });
 
