@@ -252,10 +252,13 @@
 
         .section-title { font-size: 1.3em; font-weight: 600; margin-bottom: 20px; border-bottom: 2px solid var(--accent-purple); padding-bottom: 10px; }
         .payment-history-list { display: flex; flex-direction: column; gap: 10px; }
-        .payment-history-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--surface); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; }
-        .payment-date { color: var(--text-secondary); font-size: 0.9em; }
+        .payment-history-item { display: flex; justify-content: space-between; align-items: flex-start; background-color: var(--surface); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; }
+        .payment-info { flex-grow: 1; margin-right: 10px; }
+        .payment-title { font-weight: 600; margin: 0 0 5px; font-size: 1em; }
+        .payment-description { font-size: 0.9em; color: var(--text-secondary); margin: 0 0 8px; line-height: 1.4; }
+        .payment-date { color: var(--text-secondary); font-size: 0.8em; }
         .payment-amount { font-weight: 600; }
-        .payment-status-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .payment-status-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; text-align: right; }
         .payment-status-tag { font-size: 0.75em; font-weight: 500; padding: 3px 8px; border-radius: 10px; }
         .payment-status-tag.pending { background-color: rgba(250, 204, 21, 0.15); color: #856404; }
         .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.1); color: var(--accent-green); }
@@ -606,7 +609,13 @@
                 latePaymentReminderTitle: 'Lembrete de Pagamento',
                 latePaymentReminderBody: 'Notamos um atraso em seu pagamento. Para evitar encargos, por favor, regularize sua situação.',
                 urgentWarningTitle: 'AVISO URGENTE: Pagamentos Atrasados',
-                urgentWarningBody: 'Você possui {count} parcelas em atraso. É crucial que você regularize sua dívida.'
+                urgentWarningBody: 'Você possui {count} parcelas em atraso. É crucial que você regularize sua dívida.',
+                paymentInstallmentTitle: 'Pagamento Parcela #{installment}',
+                paymentInstallmentsTitle: 'Pagamento Parcelas #{start} - #{end}',
+                partialPaymentDesc: 'Pagamento parcial ({percent}%) da parcela.',
+                fullPaymentDesc: 'Parcela #{installment} paga integralmente.',
+                multiplePaymentDesc: 'Cobre {count} parcela(s) e {percent}% da próxima.',
+                multipleFullPaymentDesc: 'Cobre {count} parcela(s) integralmente.'
             },
             es: {
                 welcome: 'Bienvenido de vuelta',
@@ -654,12 +663,12 @@
                 navDashboard: 'Panel',
                 navPay: 'Pagar',
                 navRefinance: 'Refinanciar',
-                navNotifications: 'Notificações',
-                notificationsTitle: 'Notificações',
+                navNotifications: 'Notificaciones',
+                notificationsTitle: 'Notificaciones',
                 clearNotifications: 'Limpiar todo',
-                notificationsCleared: 'Notificações limpiadas.',
-                notificationRead: 'Notificação marcada como leída.',
-                noNotifications: 'No hay notificações nuevas.',
+                notificationsCleared: 'Notificaciones limpiadas.',
+                notificationRead: 'Notificación marcada como leída.',
+                noNotifications: 'No hay notificaciones nuevas.',
                 awaitingVerification: 'Esperando verificación',
                 approved: 'Aprobado',
                 installAppTitle: 'Instala nuestra aplicación',
@@ -677,7 +686,91 @@
                 latePaymentReminderTitle: 'Recordatorio de Pago',
                 latePaymentReminderBody: 'Hemos notado un retraso en su pago. Para evitar cargos, por favor, regularice su situación.',
                 urgentWarningTitle: 'AVISO URGENTE: Pagos Atrasados',
-                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda.'
+                urgentWarningBody: 'Usted tiene {count} cuotas atrasadas. Es crucial que regularice su deuda.',
+                paymentInstallmentTitle: 'Pago Cuota #{installment}',
+                paymentInstallmentsTitle: 'Pago Cuotas #{start} - #{end}',
+                partialPaymentDesc: 'Pago parcial ({percent}%) de la cuota.',
+                fullPaymentDesc: 'Cuota #{installment} pagada completamente.',
+                multiplePaymentDesc: 'Cubre {count} cuota(s) y un {percent}% de la siguiente.',
+                multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.'
+            },
+            en: {
+                welcome: 'Welcome back',
+                welcomeMsg: 'Log in to your account to continue',
+                username: 'Username',
+                password: 'Password',
+                loginBtn: 'Login',
+                invalidCredentials: 'Invalid username or password.',
+                genericError: 'An error occurred. Please try again.',
+                appTitle: 'Client Portal',
+                loanProgress: 'Loan Progress',
+                reputationScore: 'Reputation Score',
+                reputationInfo: 'Paying on time improves your score.',
+                totalValue: 'Total Value',
+                remainingValue: 'Remaining Value',
+                installmentValue: 'Installment Value',
+                paymentHistory: 'Payment History',
+                noPayments: 'No payments registered.',
+                reputationPerfect: 'Perfect',
+                reputationGood: 'Good',
+                reputationRegular: 'Regular',
+                reputationBad: 'Bad',
+                payInstallment: 'Pay Installment',
+                qrCodePayment: 'Pay with QR Code',
+                manualPayment: 'Pay with Manual Key',
+                manualPixKey: 'Use this PIX key for manual payment:',
+                copyCode: 'Copy Code',
+                copied: 'PIX Code copied!',
+                uploadReceipt: 'Upload Receipt',
+                paymentAmountLabel: 'Payment Amount',
+                submitForVerification: 'Submit for Verification',
+                receiptSent: 'Receipt sent for analysis!',
+                uploadError: 'Error uploading receipt.',
+                invalidAmount: 'Please enter a valid amount.',
+                paymentSent: 'sent a payment receipt for the amount of',
+                settings: 'Settings',
+                logout: 'Logout',
+                accountNotFound: 'Account not found. Please log in again.',
+                dataLoadError: 'Error loading data.',
+                cropImage: 'Crop Image',
+                cancel: 'Cancel',
+                confirmCrop: 'Confirm',
+                picUpdateSuccess: 'Profile picture updated!',
+                picUpdateError: 'Error updating picture.',
+                navDashboard: 'Dashboard',
+                navPay: 'Pay',
+                navRefinance: 'Refinance',
+                navNotifications: 'Notifications',
+                notificationsTitle: 'Notifications',
+                clearNotifications: 'Clear all',
+                notificationsCleared: 'Notifications cleared.',
+                notificationRead: 'Notification marked as read.',
+                noNotifications: 'No new notifications.',
+                awaitingVerification: 'Awaiting verification',
+                approved: 'Approved',
+                installAppTitle: 'Install our app',
+                installAppMsg: 'A faster and more complete experience.',
+                installBtn: 'Install',
+                refinanceTitle: 'Refinancing',
+                requestNewFinancing: 'Request New Financing',
+                newAmount: 'New Desired Amount',
+                newInstallments: 'Number of Installments',
+                sendForAnalysis: 'Send for Analysis',
+                analysisSent: 'Request sent for analysis!',
+
+                refinanceRequested: 'requested a refinancing of',
+                reputationNotGoodTitle: 'Improve Your Score',
+                reputationNotGoodMsg: 'To request refinancing, your reputation score needs to be "Perfect". Keep paying your installments on time!',
+                latePaymentReminderTitle: 'Payment Reminder',
+                latePaymentReminderBody: 'We noticed a delay in your payment. To avoid charges, please regularize your situation.',
+                urgentWarningTitle: 'URGENT NOTICE: Overdue Payments',
+                urgentWarningBody: 'You have {count} overdue installments. It is crucial that you regularize your debt.',
+                paymentInstallmentTitle: 'Payment Installment #{installment}',
+                paymentInstallmentsTitle: 'Payment Installments #{start} - #{end}',
+                partialPaymentDesc: 'Partial payment ({percent}%) of the installment.',
+                fullPaymentDesc: 'Installment #{installment} paid in full.',
+                multiplePaymentDesc: 'Covers {count} installment(s) and {percent}% of the next one.',
+                multipleFullPaymentDesc: 'Covers {count} installment(s) completely.'
             }
         };
 
@@ -871,12 +964,12 @@
         function updateDashboardView() {
             if (!currentClient || !document.getElementById('home-view')) return;
             
-            const confirmedPayments = currentClient.history?.filter(p => p.status !== 'pending_verification') || [];
-            const paidAmount = confirmedPayments.reduce((sum, p) => sum + p.amount, 0);
+            const paidAmount = currentClient.paid || 0;
             const totalAmount = currentClient.totalLoan || 0;
             const remainingAmount = Math.max(0, totalAmount - paidAmount);
             
-            const paidInstallments = confirmedPayments.length;
+            const originalInstallment = currentClient.originalInstallmentAmount || 1; // Evitar división por cero
+            const paidInstallments = Math.floor(paidAmount / originalInstallment);
             const totalInstallments = (currentClient.installments || "0/0").split('/').map(Number)[1] || 0;
             const progressPercentage = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0;
             
@@ -885,19 +978,65 @@
 
             let historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
             if (currentClient.history && currentClient.history.length > 0) {
-                historyHtml = [...currentClient.history]
-                    .sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0))
+                let cumulativePaid = 0;
+
+                const paymentDetails = [...currentClient.history]
+                    .filter(p => p.date && p.date.seconds) 
+                    .sort((a, b) => a.date.seconds - b.date.seconds) 
                     .map(p => {
-                        const dateString = p.date?.seconds ? new Date(p.date.seconds * 1000).toLocaleDateString('pt-BR') : 'Data inválida';
-                        let statusTag = '';
+                        const installmentNumberStart = Math.floor(cumulativePaid / originalInstallment) + 1;
+                        
+                        const numInstallmentsCovered = p.amount / originalInstallment;
+                        const fullInstallments = Math.floor(numInstallmentsCovered);
+                        const partialPercent = Math.round((numInstallmentsCovered - fullInstallments) * 100);
+
+                        let title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
+                        let description = '';
+
+                        if (numInstallmentsCovered < 0.99) { // Usar 0.99 para evitar errores de punto flotante
+                            description = translations[currentLang].partialPaymentDesc.replace('{percent}', (numInstallmentsCovered * 100).toFixed(0));
+                        } else if (numInstallmentsCovered >= 0.99 && numInstallmentsCovered < 1.01) {
+                            description = translations[currentLang].fullPaymentDesc.replace('{installment}', installmentNumberStart);
+                        } else {
+                            const endInstallment = installmentNumberStart + fullInstallments - 1;
+                            title = translations[currentLang].paymentInstallmentsTitle
+                                .replace('{start}', installmentNumberStart)
+                                .replace('{end}', endInstallment > installmentNumberStart ? endInstallment : '');
+                            
+                             if (partialPercent > 1) { // Usar > 1 para ignorar pequeños residuos
+                                description = translations[currentLang].multiplePaymentDesc
+                                    .replace('{count}', fullInstallments)
+                                    .replace('{percent}', partialPercent);
+                            } else {
+                                description = translations[currentLang].multipleFullPaymentDesc.replace('{count}', fullInstallments);
+                            }
+                        }
+
+                        cumulativePaid += p.amount;
+
+                        return {
+                            ...p,
+                            dateTimeString: new Date(p.date.seconds * 1000).toLocaleString(currentLang, { dateStyle: 'short', timeStyle: 'short'}),
+                            title: title,
+                            description: description,
+                        };
+                    });
+                
+                historyHtml = paymentDetails.reverse() 
+                    .map(p => {
+                         let statusTag = '';
                         if (p.status === 'pending_verification') {
                             statusTag = `<span class="payment-status-tag pending">${translations[currentLang].awaitingVerification}</span>`;
-                        } else if (p.status === 'approved' || !p.status) { // Treat old payments without status as approved
+                        } else if (p.status === 'approved' || !p.status) {
                             statusTag = `<span class="payment-status-tag approved">${translations[currentLang].approved}</span>`;
                         }
                         
                         return `<div class="payment-history-item">
-                                    <span class="payment-date">${dateString}</span>
+                                    <div class="payment-info">
+                                        <h4 class="payment-title">${p.title}</h4>
+                                        <p class="payment-description">${p.description}</p>
+                                        <span class="payment-date">${p.dateTimeString}</span>
+                                    </div>
                                     <div class="payment-status-wrapper">
                                         <span class="payment-amount" style="color: ${p.status !== 'pending_verification' ? 'var(--accent-green)' : 'var(--text-secondary)'}">${money(p.amount)}</span>
                                         ${statusTag}
@@ -910,7 +1049,8 @@
             document.getElementById('progress-bar').style.strokeDashoffset = strokeDashoffset;
             document.getElementById('total-value').textContent = money(totalAmount);
             document.getElementById('remaining-value').textContent = money(remainingAmount);
-            document.getElementById('kpi-installment-value').textContent = money(currentClient.amount || 0);
+            document.getElementById('kpi-installment-value').textContent = money(currentClient.originalInstallmentAmount || 0);
+            
             document.getElementById('payment-history-list').innerHTML = historyHtml;
             
             updateReputationView();
@@ -930,10 +1070,13 @@
         function updatePayView() {
             if(!currentClient || !document.getElementById('pay-view')) return;
 
-            const amount = currentClient.amount || 0;
+            const amountDueNow = Math.max(0, (currentClient.originalInstallmentAmount || 0) - (currentClient.paymentBalance || 0));
+            document.getElementById('receipt-amount').value = amountDueNow > 0 ? amountDueNow.toFixed(2) : '';
+            document.getElementById('receipt-amount').placeholder = money(amountDueNow);
+
 
             const transactionId = "***"; 
-            const payload = `00020126580014br.gov.bcb.pix0114${PIX_KEY_FIXED}520400005303986540${amount.toFixed(2)}5802BR5913${currentClient.name.split(' ')[0]}6009SAO PAULO62070503***6304EF2E`;
+            const payload = `00020126580014br.gov.bcb.pix0114${PIX_KEY_FIXED}520400005303986540${amountDueNow.toFixed(2)}5802BR5913${currentClient.name.split(' ')[0]}6009SAO PAULO62070503***6304EF2E`;
             document.getElementById('pix-copy-paste-code').value = payload;
             document.getElementById('pix-qr-code').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
             
@@ -1436,12 +1579,17 @@
                 } else if(langDropdown) {
                     langDropdown.style.display = 'none';
                 }
-                if (target.closest('[data-lang]')) {
-                    const newLang = target.dataset.lang;
+                
+                const langButton = target.closest('[data-lang]');
+                if (langButton) {
+                    const newLang = langButton.dataset.lang;
                     localStorage.setItem('language', newLang);
-                    applyLanguage(newLang);
-                    langDropdown.style.display = 'none';
+                    currentLang = newLang; // Actualiza la variable global PRIMERO
+                    updateAllViews();      // LUEGO, refresca todas las vistas (incluido el historial)
+                    
+                    if (langDropdown) langDropdown.style.display = 'none';
                 }
+
                 const navItem = target.closest('.nav-item');
                 if (navItem) {
                     const targetView = navItem.dataset.view;
@@ -1550,8 +1698,7 @@
                         amount: amount,
                         date: new Date(),
                         receiptUrl: data.secure_url,
-                        status: 'pending_verification',
-                        dueAmount: currentClient.amount // Añadido para registrar el valor adeudado al momento del envío
+                        status: 'pending_verification'
                     })
                 });
 
