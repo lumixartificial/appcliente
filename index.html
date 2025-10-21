@@ -291,6 +291,35 @@
         body.dark-mode .payment-status-tag.approved { background-color: rgba(40, 167, 69, 0.2); }
         .no-history { color: var(--text-secondary); text-align: center; padding: 20px; }
 
+        .loan-tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 5px; /* Para la barra de scroll */
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        .loan-tabs-container::-webkit-scrollbar { display: none; } /* Chrome, Safari, Opera */
+        .loan-tab {
+            padding: 10px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--surface);
+            color: var(--text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease-in-out;
+        }
+        .loan-tab.active {
+            background-color: var(--accent-purple);
+            color: white;
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(111, 66, 193, 0.3);
+        }
+
         .bottom-nav { position: static; flex-shrink: 0; background-color: var(--surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05); transition: background-color 0.3s, border-color 0.3s; z-index: 150; }
         body.dark-mode .bottom-nav { box-shadow: none; }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-secondary); text-decoration: none; font-size: 0.8em; padding: 5px 15px; cursor: pointer; }
@@ -430,6 +459,7 @@
         </header>
         <main>
             <div id="home-view" class="view active container">
+                <div id="loan-tabs-container" class="loan-tabs-container"></div>
                 <div class="kpi-card progress-card" style="margin-bottom: 20px;">
                     <h3 class="kpi-title" style="justify-content: center;" data-lang-key="loanProgress"></h3>
                     <div class="progress-circle">
@@ -556,8 +586,9 @@
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
         let receiptFile = null;
         let notificationInterval;
+        let selectedLoanIndex = 0;
 
-        const PIX_KEY_FIXED = "000.0.000-00";
+        const PIX_KEY_FIXED = "000.0.0.000-00";
         const PIX_KEY_MANUAL = "chave-manual@email.com";
         
         // ¡¡¡ ACCIÓN REQUERIDA !!!
@@ -642,7 +673,8 @@
                 fullPaymentDesc: 'Parcela #{installment} paga integralmente.',
                 multiplePaymentDesc: 'Cobre {count} parcela(s) e {percent}% da próxima.',
                 multipleFullPaymentDesc: 'Cobre {count} parcela(s) integralmente.',
-                loanFinished: 'Seu empréstimo já foi totalmente pago!'
+                loanFinished: 'Seu empréstimo já foi totalmente pago!',
+                loanLabel: 'Empréstimo'
             },
             es: {
                 welcome: 'Bienvenido de vuelta',
@@ -720,7 +752,8 @@
                 fullPaymentDesc: 'Cuota #{installment} pagada completamente.',
                 multiplePaymentDesc: 'Cubre {count} cuota(s) y un {percent}% de la siguiente.',
                 multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.',
-                loanFinished: '¡Tu préstamo ya ha sido pagado en su totalidad!'
+                loanFinished: '¡Tu préstamo ya ha sido pagado en su totalidad!',
+                loanLabel: 'Préstamo'
             },
             en: {
                 welcome: 'Welcome back',
@@ -799,7 +832,8 @@
                 fullPaymentDesc: 'Installment #{installment} paid in full.',
                 multiplePaymentDesc: 'Covers {count} installment(s) and {percent}% of the next one.',
                 multipleFullPaymentDesc: 'Covers {count} installment(s) completely.',
-                loanFinished: 'Your loan is already fully paid!'
+                loanFinished: 'Your loan is already fully paid!',
+                loanLabel: 'Loan'
             }
         };
 
@@ -858,10 +892,14 @@
 
         async function checkAndSendLatePaymentNotifications() {
             const LOG_PREFIX = `[CLIENTE-APP]`;
-            if (!currentClient) return;
+            if (!currentClient || !currentClient.loans || currentClient.loans.length === 0) return;
+
+            const currentLoan = currentClient.loans[selectedLoanIndex];
+            if (!currentLoan) return;
+
             console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de pagos atrasados...`);
 
-            const lateInstallments = calculateLatePaymentDays(currentClient);
+            const lateInstallments = calculateLatePaymentDays(currentLoan);
             console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Días de atraso calculados: ${lateInstallments}`);
             
             if (lateInstallments <= 0) {
@@ -916,49 +954,67 @@
             }
         }
         
-        function calculateLatePaymentDays(client) {
-            if (!client || client.paid >= client.totalLoan) return 0;
+        function calculateLatePaymentDays(loan) {
+            if (!loan || (loan.paid || 0) >= (loan.totalLoan || 0)) return 0;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
             let lastRelevantDate;
-            if (client.history && client.history.length > 0) {
-                const sortedHistory = [...client.history]
+            if (loan.history && loan.history.length > 0) {
+                const sortedHistory = [...loan.history]
                     .filter(h => h.date?.seconds && h.status !== 'pending_verification')
                     .sort((a, b) => b.date.seconds - a.date.seconds);
                 if (sortedHistory.length > 0) lastRelevantDate = new Date(sortedHistory[0].date.seconds * 1000);
             } 
             if (!lastRelevantDate) {
-                if (client.startDate?.seconds) {
-                    lastRelevantDate = new Date(client.startDate.seconds * 1000);
+                if (loan.startDate?.seconds) {
+                    lastRelevantDate = new Date(loan.startDate.seconds * 1000);
                 } else {
                      return 0;
                 }
             }
             
-            lastRelevantDate.setHours(0, 0, 0, 0);
-
-            if (lastRelevantDate >= today) return 0;
-
-            let workingDaysToPay = 0;
+            let lateDays = 0;
             let checkDate = new Date(lastRelevantDate);
-            while (checkDate < today) {
-                checkDate.setDate(checkDate.getDate() + 1);
+            checkDate.setDate(checkDate.getDate() + 1); // Empezamos a contar desde el día siguiente al último pago/inicio
+
+            while (checkDate <= today) {
                 const dayOfWeek = checkDate.getDay();
-                const formattedDate = `${String(checkDate.getDate()).padStart(2, '0')}/${String(checkDate.getMonth() + 1).padStart(2, '0')}`;
-                const isHoliday = nationalHolidays.includes(formattedDate);
-                const isPaymentDay = (client.paymentDays || []).includes(dayOfWeek);
-                if (!isHoliday && isPaymentDay) {
-                    workingDaysToPay++;
+                const dateString = ('0' + checkDate.getDate()).slice(-2) + '/' + ('0' + (checkDate.getMonth() + 1)).slice(-2);
+                
+                if (dayOfWeek !== 0 && !nationalHolidays.includes(dateString)) {
+                    lateDays++;
                 }
+                checkDate.setDate(checkDate.getDate() + 1);
             }
-            return workingDaysToPay > 0 ? workingDaysToPay : 0;
+            return lateDays;
+        }
+
+        function renderLoanTabs() {
+            const tabsContainer = document.getElementById('loan-tabs-container');
+            if (!tabsContainer || !currentClient) return;
+
+            const activeLoans = (currentClient.loans || []).filter(l => l.status === 'active');
+            
+            if (activeLoans.length > 1) {
+                tabsContainer.style.display = 'flex';
+                tabsContainer.innerHTML = activeLoans.map((loan, index) => `
+                    <button class="loan-tab ${index === selectedLoanIndex ? 'active' : ''}" data-index="${index}">
+                        ${translations[currentLang].loanLabel} ${index + 1}
+                    </button>
+                `).join('');
+            } else {
+                tabsContainer.style.display = 'none';
+            }
         }
 
         function updateReputationView() {
              if (!currentClient || !document.getElementById('reputation-card')) return;
             
-            const lateDays = calculateLatePaymentDays(currentClient);
+            const currentLoan = (currentClient.loans || [])[selectedLoanIndex];
+            if (!currentLoan) return;
+
+            const lateDays = calculateLatePaymentDays(currentLoan);
             const score = Math.max(0, 10 - lateDays); 
 
             const bar = document.getElementById('reputation-bar');
@@ -991,14 +1047,17 @@
         }
 
         function updateDashboardView() {
-            if (!currentClient || !document.getElementById('home-view')) return;
+            if (!currentClient || !document.getElementById('home-view') || !currentClient.loans || currentClient.loans.length === 0) return;
             
-            const paidAmount = currentClient.paid || 0;
-            const totalAmount = currentClient.totalLoan || 0;
+            const currentLoan = currentClient.loans[selectedLoanIndex];
+            if (!currentLoan) return;
+
+            const paidAmount = currentLoan.paid || 0;
+            const totalAmount = currentLoan.totalLoan || 0;
             const remainingAmount = Math.max(0, totalAmount - paidAmount);
             
-            const originalInstallment = currentClient.originalInstallmentAmount || 1; // Evitar división por cero
-            const totalInstallments = (currentClient.installments || "0/0").split('/').map(Number)[1] || 0;
+            const originalInstallment = currentLoan.originalInstallmentAmount || 1; // Evitar división por cero
+            const totalInstallments = currentLoan.totalInstallments || 0;
             const paidInstallments = totalInstallments > 0 ? Math.min(totalInstallments, Math.floor(paidAmount / originalInstallment)) : 0;
             const progressPercentage = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0;
             
@@ -1006,10 +1065,10 @@
             const strokeDashoffset = circleCircumference - (progressPercentage / 100) * circleCircumference;
 
             let historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
-            if (currentClient.history && currentClient.history.length > 0) {
+            if (currentLoan.history && currentLoan.history.length > 0) {
                 let cumulativePaid = 0;
 
-                const paymentDetails = [...currentClient.history]
+                const paymentDetails = [...currentLoan.history]
                     .filter(p => p.date && p.date.seconds) 
                     .sort((a, b) => a.date.seconds - b.date.seconds) 
                     .map(p => {
@@ -1078,7 +1137,7 @@
             document.getElementById('progress-bar').style.strokeDashoffset = strokeDashoffset;
             document.getElementById('total-value').textContent = money(totalAmount);
             document.getElementById('remaining-value').textContent = money(remainingAmount);
-            document.getElementById('kpi-installment-value').textContent = money(currentClient.originalInstallmentAmount || 0);
+            document.getElementById('kpi-installment-value').textContent = money(currentLoan.originalInstallmentAmount || 0);
             
             document.getElementById('payment-history-list').innerHTML = historyHtml;
             
@@ -1093,7 +1152,6 @@
                     payNavItem.classList.remove('disabled');
                 }
             }
-
             lucide.createIcons({nodes: document.getElementById('home-view').querySelectorAll('[data-lucide]')});
         }
 
@@ -1107,9 +1165,12 @@
         }
 
         function updatePayView() {
-            if(!currentClient || !document.getElementById('pay-view')) return;
+            if(!currentClient || !document.getElementById('pay-view') || !currentClient.loans || currentClient.loans.length === 0) return;
+            
+            const currentLoan = currentClient.loans[selectedLoanIndex];
+            if (!currentLoan) return;
 
-            const amountDueNow = Math.max(0, (currentClient.originalInstallmentAmount || 0) - (currentClient.paymentBalance || 0));
+            const amountDueNow = Math.max(0, (currentLoan.originalInstallmentAmount || 0) - (currentLoan.paymentBalance || 0));
             document.getElementById('receipt-amount').value = amountDueNow > 0 ? amountDueNow.toFixed(2) : '';
             document.getElementById('receipt-amount').placeholder = money(amountDueNow);
 
@@ -1123,10 +1184,13 @@
         }
 
         function updateRefinanceView() {
-            if (!currentClient || !document.getElementById('refinance-view')) return;
+            if (!currentClient || !document.getElementById('refinance-view') || !currentClient.loans || currentClient.loans.length === 0) return;
 
             const refinanceView = document.getElementById('refinance-view');
-            const lateDays = calculateLatePaymentDays(currentClient);
+            const currentLoan = currentClient.loans[selectedLoanIndex];
+            if (!currentLoan) return;
+            
+            const lateDays = calculateLatePaymentDays(currentLoan);
             const score = Math.max(0, 10 - lateDays);
             const isEligible = score === 10;
             
@@ -1355,7 +1419,7 @@
             currentClient = null;
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
-            history.replaceState(null, '', window.location.pathname);
+            // history.replaceState(null, '', window.location.pathname); // [CORRECCIÓN] Se elimina esta línea para evitar el SecurityError en el entorno de vista previa.
         }
 
         function updateAllViews() {
@@ -1365,6 +1429,7 @@
             const placeholderUrl = `https://placehold.co/40x40/6f42c1/FFFFFF?text=${nameInitial}`;
             document.getElementById('header-profile-img').src = currentClient.profilePictureUrl || placeholderUrl;
             
+            renderLoanTabs(); // Renderiza las pestañas de préstamos primero
             updateDashboardView();
             updateProfileView();
             updatePayView();
@@ -1480,7 +1545,28 @@
             let isFirstLoad = true;
             unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
                 if (docSnap.exists()) {
-                    currentClient = { id: docSnap.id, ...docSnap.data() };
+                    let clientData = { id: docSnap.id, ...docSnap.data() };
+
+                    // Capa de Compatibilidad: Adapta la estructura de datos antigua a la nueva.
+                    if (!clientData.loans && clientData.totalLoan) {
+                        console.warn("[CLIENTE-APP] Estructura de datos antigua detectada. Adaptando a la nueva estructura multi-préstamo.");
+                        clientData.loans = [{
+                            totalLoan: clientData.totalLoan,
+                            paid: clientData.paid || 0,
+                            installments: clientData.installments,
+                            originalInstallmentAmount: clientData.originalInstallmentAmount,
+                            totalInstallments: (clientData.installments || "0/0").split('/').map(Number)[1] || 0,
+                            startDate: clientData.startDate,
+                            history: clientData.history || [],
+                            paymentBalance: clientData.paymentBalance || 0,
+                            status: 'active'
+                        }];
+                    } else if (!clientData.loans) {
+                        clientData.loans = [];
+                    }
+                    
+                    currentClient = clientData;
+                    
                     updateAllViews();
                     if (isFirstLoad) {
                         console.log('[CLIENTE-APP] Primera carga del cliente. Iniciando verificaciones y setup de FCM.');
@@ -1629,6 +1715,15 @@
                     if (langDropdown) langDropdown.style.display = 'none';
                 }
 
+                const loanTab = target.closest('.loan-tab');
+                if (loanTab && loanTab.dataset.index) {
+                    const newIndex = parseInt(loanTab.dataset.index, 10);
+                    if (newIndex !== selectedLoanIndex) {
+                        selectedLoanIndex = newIndex;
+                        updateAllViews();
+                    }
+                }
+
                 const navItem = target.closest('.nav-item');
                 if (navItem) {
                     if (navItem.classList.contains('disabled')) {
@@ -1736,13 +1831,23 @@
                 const data = await response.json();
                 
                 const clientRef = doc(db, 'clients', currentClient.id);
+                
+                // Crea una copia profunda para modificar el array de préstamos de forma segura
+                const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans));
+                const newPayment = {
+                    amount: amount,
+                    date: new Date(),
+                    receiptUrl: data.secure_url,
+                    status: 'pending_verification'
+                };
+                
+                if (!updatedLoans[selectedLoanIndex].history) {
+                    updatedLoans[selectedLoanIndex].history = [];
+                }
+                updatedLoans[selectedLoanIndex].history.push(newPayment);
+
                 await updateDoc(clientRef, {
-                    history: arrayUnion({
-                        amount: amount,
-                        date: new Date(),
-                        receiptUrl: data.secure_url,
-                        status: 'pending_verification'
-                    })
+                    loans: updatedLoans
                 });
 
                 showToast(translations[currentLang].receiptSent);
@@ -1853,3 +1958,4 @@
     </script>
 </body>
 </html>
+
