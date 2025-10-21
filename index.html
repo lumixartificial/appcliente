@@ -295,6 +295,7 @@
         body.dark-mode .bottom-nav { box-shadow: none; }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-secondary); text-decoration: none; font-size: 0.8em; padding: 5px 15px; cursor: pointer; }
         .nav-item.active { color: var(--accent-purple); }
+        .nav-item.disabled { opacity: 0.5; cursor: not-allowed; }
         
         .view { display: none; }
         .view.active { display: block; }
@@ -640,7 +641,8 @@
                 partialPaymentDesc: 'Pagamento parcial ({percent}%) da parcela.',
                 fullPaymentDesc: 'Parcela #{installment} paga integralmente.',
                 multiplePaymentDesc: 'Cobre {count} parcela(s) e {percent}% da próxima.',
-                multipleFullPaymentDesc: 'Cobre {count} parcela(s) integralmente.'
+                multipleFullPaymentDesc: 'Cobre {count} parcela(s) integralmente.',
+                loanFinished: 'Seu empréstimo já foi totalmente pago!'
             },
             es: {
                 welcome: 'Bienvenido de vuelta',
@@ -717,7 +719,8 @@
                 partialPaymentDesc: 'Pago parcial ({percent}%) de la cuota.',
                 fullPaymentDesc: 'Cuota #{installment} pagada completamente.',
                 multiplePaymentDesc: 'Cubre {count} cuota(s) y un {percent}% de la siguiente.',
-                multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.'
+                multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.',
+                loanFinished: '¡Tu préstamo ya ha sido pagado en su totalidad!'
             },
             en: {
                 welcome: 'Welcome back',
@@ -795,7 +798,8 @@
                 partialPaymentDesc: 'Partial payment ({percent}%) of the installment.',
                 fullPaymentDesc: 'Installment #{installment} paid in full.',
                 multiplePaymentDesc: 'Covers {count} installment(s) and {percent}% of the next one.',
-                multipleFullPaymentDesc: 'Covers {count} installment(s) completely.'
+                multipleFullPaymentDesc: 'Covers {count} installment(s) completely.',
+                loanFinished: 'Your loan is already fully paid!'
             }
         };
 
@@ -994,8 +998,8 @@
             const remainingAmount = Math.max(0, totalAmount - paidAmount);
             
             const originalInstallment = currentClient.originalInstallmentAmount || 1; // Evitar división por cero
-            const paidInstallments = Math.floor(paidAmount / originalInstallment);
             const totalInstallments = (currentClient.installments || "0/0").split('/').map(Number)[1] || 0;
+            const paidInstallments = totalInstallments > 0 ? Math.min(totalInstallments, Math.floor(paidAmount / originalInstallment)) : 0;
             const progressPercentage = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0;
             
             const circleCircumference = 2 * Math.PI * 54;
@@ -1079,6 +1083,16 @@
             document.getElementById('payment-history-list').innerHTML = historyHtml;
             
             updateReputationView();
+
+            // Desactiva la pestaña de Pagar si el préstamo está completo
+            const payNavItem = document.querySelector('.nav-item[data-view="pay"]');
+            if (payNavItem) {
+                if (paidInstallments >= totalInstallments && totalInstallments > 0) {
+                    payNavItem.classList.add('disabled');
+                } else {
+                    payNavItem.classList.remove('disabled');
+                }
+            }
 
             lucide.createIcons({nodes: document.getElementById('home-view').querySelectorAll('[data-lucide]')});
         }
@@ -1617,6 +1631,10 @@
 
                 const navItem = target.closest('.nav-item');
                 if (navItem) {
+                    if (navItem.classList.contains('disabled')) {
+                        showToast(translations[currentLang].loanFinished);
+                        return;
+                    }
                     const targetView = navItem.dataset.view;
                     location.hash = targetView;
                 }
