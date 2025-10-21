@@ -296,7 +296,7 @@
             gap: 10px;
             margin-bottom: 20px;
             overflow-x: auto;
-            padding-bottom: 5px; /* Para la barra de scroll */
+            padding-bottom: 5px; /* For the scroll bar */
             -ms-overflow-style: none;  /* IE and Edge */
             scrollbar-width: none;  /* Firefox */
         }
@@ -560,7 +560,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging.js";
         
         const firebaseConfig = {
@@ -587,10 +587,49 @@
         let receiptFile = null;
         let notificationInterval;
         let selectedLoanIndex = 0;
+        let collectorSettings = null; // Para almacenar la configuración del cobrador
 
-        const PIX_KEY_FIXED = "000.0.0.000-00";
-        const PIX_KEY_MANUAL = "chave-manual@email.com";
+        const PAYMENT_CONFIGS = {
+            // Suramérica
+            "BRL": { name: "Real Brasileiro", methods: [ { id: 'brl_pix', label: 'Chave PIX', type: 'text', placeholder: 'CPF, e-mail, telefone...' }, { id: 'brl_qrcode_text', label: 'PIX Copia e Cola', type: 'textarea', placeholder: 'Cole o código BR...' }, { id: 'brl_qrcode_image', label: 'Imagem QR Code PIX', type: 'image' } ]},
+            "ARS": { name: "Peso Argentino", methods: [ { id: 'ars_mercadopago', label: 'Mercado Pago (CVU/Alias)', type: 'text', placeholder: 'CVU ou Alias da conta' }, { id: 'ars_transferencia', label: 'Transferencia Bancaria (CBU)', type: 'text', placeholder: 'CBU da conta bancária' } ]},
+            "BOB": { name: "Boliviano", methods: [ { id: 'bob_qr', label: 'QR Simple', type: 'image' }, { id: 'bob_tigomoney', label: 'Tigo Money', type: 'tel', placeholder: 'Número de Teléfono' } ]},
+            "CLP": { name: "Peso Chileno", methods: [ { id: 'clp_transferencia', label: 'Transferencia (Cuenta RUT)', type: 'text', placeholder: 'RUT o datos de la cuenta' } ]},
+            "COP": { name: "Peso Colombiano", methods: [ { id: 'cop_nequi', label: 'Nequi', type: 'tel', placeholder: 'Número de telefone Nequi' }, { id: 'cop_daviplata', label: 'Daviplata', type: 'tel', placeholder: 'Número de telefone Daviplata' }, { id: 'cop_bancolombia', label: 'Bancolombia A la Mano', type: 'text', placeholder: 'Número de cuenta o teléfono' }, { id: 'cop_qrcode_image', label: 'Imagem QR Code Genérico', type: 'image' } ]},
+            "USD_EC": { name: "Dólar (Ecuador)", methods: [ { id: 'ec_transferencia_pichincha', label: 'Transferencia Banco Pichincha', type: 'text', placeholder: 'Datos de la cuenta' }, { id: 'ec_transferencia_guayaquil', label: 'Transferencia Banco Guayaquil', type: 'text', placeholder: 'Datos de la cuenta' } ]},
+            "PYG": { name: "Guaraní Paraguayo", methods: [ { id: 'pyg_giros', label: 'Giros Tigo / Personal', type: 'tel', placeholder: 'Número de Teléfono' }, { id: 'pyg_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta' } ]},
+            "PEN": { name: "Sol Peruano", methods: [ { id: 'pen_yape', label: 'Yape', type: 'tel', placeholder: 'Número de Celular o QR' }, { id: 'pen_plin', label: 'Plin', type: 'tel', placeholder: 'Número de Celular' } ]},
+            "UYU": { name: "Peso Uruguayo", methods: [ { id: 'uyu_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta' } ]},
+            "VES": { name: "Bolívar Venezuelano", methods: [ { id: 'ves_pagomovil', label: 'Pago Móvil', type: 'text', placeholder: 'C.I, Banco, Teléfono' } ]},
+            // Centroamérica
+            "CRC": { name: "Colón Costarricense", methods: [ { id: 'crc_sinpe', label: 'SINPE Móvil', type: 'tel', placeholder: 'Número de Teléfono' } ]},
+            "GTQ": { name: "Quetzal Guatemalteco", methods: [ { id: 'gtq_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta (BAC, BI, etc.)' } ]},
+            "HNL": { name: "Lempira Hondureña", methods: [ { id: 'hnl_tigomoney', label: 'Tigo Money', type: 'tel', placeholder: 'Número de Teléfono' }, { id: 'hnl_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta' } ]},
+            "NIO": { name: "Córdoba Nicaragüense", methods: [ { id: 'nio_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta (Lafise, BAC)' } ]},
+            "PAB": { name: "Balboa Panameño / USD", methods: [ { id: 'pab_yappy', label: 'Yappy (Banco General)', type: 'tel', placeholder: 'Número de Teléfono' }, { id: 'pab_nequi', label: 'Nequi Panamá', type: 'tel', placeholder: 'Número de Teléfono' } ]},
+            "USD_SV": { name: "Dólar (El Salvador)", methods: [ { id: 'sv_chivo', label: 'Chivo Wallet', type: 'text', placeholder: 'Número de DUI o Teléfono' }, { id: 'sv_transferencia', label: 'Transferencia Bancaria', type: 'text', placeholder: 'Datos de la cuenta' } ]},
+            // Norteamérica y General
+            "USD": { name: "Dólar Americano (General)", methods: [ { id: 'usd_zelle', label: 'Zelle', type: 'email', placeholder: 'E-mail ou telefone Zelle' }, { id: 'usd_cashapp', label: 'Cash App', type: 'text', placeholder: '$Cashtag' }, { id: 'usd_paypal', label: 'PayPal', type: 'email', placeholder: 'E-mail do PayPal.me' } ]},
+            "MXN": { name: "Peso Mexicano", methods: [ { id: 'mxn_spei', label: 'Transferencia SPEI (CLABE)', type: 'text', placeholder: 'CLABE Interbancaria' }, { id: 'mxn_oxxo', label: 'Pago en OXXO', type: 'text', placeholder: 'Número de referência para OXXO Pay' } ]},
+            "CAD": { name: "Dólar Canadiense", methods: [ { id: 'cad_interac', label: 'Interac e-Transfer', type: 'email', placeholder: 'Email para transferencia' } ]}
+        };
+
+        const CURRENCY_FORMATS = {
+            "BRL": { locale: 'pt-BR', currency: 'BRL' }, "ARS": { locale: 'es-AR', currency: 'ARS' },
+            "BOB": { locale: 'es-BO', currency: 'BOB' }, "CLP": { locale: 'es-CL', currency: 'CLP' },
+            "COP": { locale: 'es-CO', currency: 'COP' }, "USD_EC": { locale: 'es-EC', currency: 'USD' },
+            "PYG": { locale: 'es-PY', currency: 'PYG' }, "PEN": { locale: 'es-PE', currency: 'PEN' },
+            "UYU": { locale: 'es-UY', currency: 'UYU' }, "VES": { locale: 'es-VE', currency: 'VES' },
+            "CRC": { locale: 'es-CR', currency: 'CRC' }, "GTQ": { locale: 'es-GT', currency: 'GTQ' },
+            "HNL": { locale: 'es-HN', currency: 'HNL' }, "NIO": { locale: 'es-NI', currency: 'NIO' },
+            "PAB": { locale: 'es-PA', currency: 'PAB' }, "USD_SV": { locale: 'es-SV', currency: 'USD' },
+            "USD": { locale: 'en-US', currency: 'USD' }, "MXN": { locale: 'es-MX', currency: 'MXN' },
+            "CAD": { locale: 'en-CA', currency: 'CAD' }
+        };
         
+        const PIX_KEY_FIXED = "000.0.0.000-00"; // This is now legacy, will be replaced by dynamic data.
+        const PIX_KEY_MANUAL = "chave-manual@email.com"; // This is now legacy.
+
         // ¡¡¡ ACCIÓN REQUERIDA !!!
         // Reemplaza la siguiente clave con tu "Public VAPID key" real desde:
         // Firebase Console -> Project Settings -> Cloud Messaging -> Web configuration -> Key pair
@@ -674,7 +713,10 @@
                 multiplePaymentDesc: 'Cobre {count} parcela(s) e {percent}% da próxima.',
                 multipleFullPaymentDesc: 'Cobre {count} parcela(s) integralmente.',
                 loanFinished: 'Seu empréstimo já foi totalmente pago!',
-                loanLabel: 'Empréstimo'
+                loanLabel: 'Empréstimo',
+                paymentOptions: 'Opções de Pagamento',
+                copyKey: 'Copiar Chave',
+                noPaymentMethodsConfigured: 'Nenhum método de pagamento configurado pelo seu cobrador.'
             },
             es: {
                 welcome: 'Bienvenido de vuelta',
@@ -753,7 +795,10 @@
                 multiplePaymentDesc: 'Cubre {count} cuota(s) y un {percent}% de la siguiente.',
                 multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.',
                 loanFinished: '¡Tu préstamo ya ha sido pagado en su totalidad!',
-                loanLabel: 'Préstamo'
+                loanLabel: 'Préstamo',
+                paymentOptions: 'Opciones de Pago',
+                copyKey: 'Copiar Clave',
+                noPaymentMethodsConfigured: 'Ningún método de pago configurado por tu cobrador.'
             },
             en: {
                 welcome: 'Welcome back',
@@ -833,7 +878,10 @@
                 multiplePaymentDesc: 'Covers {count} installment(s) and {percent}% of the next one.',
                 multipleFullPaymentDesc: 'Covers {count} installment(s) completely.',
                 loanFinished: 'Your loan is already fully paid!',
-                loanLabel: 'Loan'
+                loanLabel: 'Loan',
+                paymentOptions: 'Opciones de Pago',
+                copyKey: 'Copiar Clave',
+                noPaymentMethodsConfigured: 'No payment methods have been configured by your collector.'
             }
         };
 
@@ -859,7 +907,9 @@
         }
 
         function money(value) {
-            return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const currencyCode = collectorSettings?.paymentSettings?.currency || 'BRL';
+            const format = CURRENCY_FORMATS[currencyCode] || CURRENCY_FORMATS['BRL'];
+            return (value || 0).toLocaleString(format.locale, { style: 'currency', currency: format.currency });
         }
 
         async function sendNotificationTicket(title, body, type, icon) {
@@ -1216,27 +1266,78 @@
             if (notificationInterval) clearInterval(notificationInterval);
             sessionStorage.removeItem('lumixClientId');
             currentClient = null;
+            collectorSettings = null; // Limpiar configuración del cobrador al salir
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
             // history.replaceState(null, '', window.location.pathname); // [CORRECCIÓN] Se elimina esta línea para evitar el SecurityError en el entorno de vista previa.
         }
 
         function updatePayView() {
-            if (!currentClient || !document.getElementById('pay-view')) return;
+            const payViewContainer = document.getElementById('pay-view');
+            if (!payViewContainer) return;
 
-            const qrCodeEl = document.getElementById('pix-qr-code');
-            const copyPasteEl = document.getElementById('pix-copy-paste-code');
-            const manualKeyEl = document.getElementById('manual-pix-key-value');
+            if (!collectorSettings || !collectorSettings.paymentSettings) {
+                payViewContainer.innerHTML = `<h2 class="section-title" data-lang-key="paymentOptions"></h2><p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
+                applyLanguage(currentLang);
+                return;
+            }
+
+            const settings = collectorSettings.paymentSettings;
+            const activeMethods = Object.keys(settings.methods || {}).filter(id => settings.methods[id].active && settings.methods[id].data);
+
+            let methodsHtml = `<h2 class="section-title" data-lang-key="paymentOptions"></h2>`;
+
+            if (activeMethods.length === 0) {
+                methodsHtml += `<p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
+            } else {
+                methodsHtml += activeMethods.map(id => {
+                    const methodConfig = PAYMENT_CONFIGS[settings.currency]?.methods.find(m => m.id === id);
+                    const methodData = settings.methods[id].data;
+                    
+                    if (!methodConfig) return '';
+
+                    if (methodConfig.type === 'image') {
+                        return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                    <h3 class="kpi-title">${methodConfig.label}</h3>
+                                    <img src="${methodData}" alt="${methodConfig.label}" style="max-width: 200px; margin: 10px auto; display: block; border-radius: 8px;">
+                                </div>`;
+                    } else if (methodConfig.type === 'textarea') {
+                         return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                     <h3 class="kpi-title">${methodConfig.label}</h3>
+                                     <textarea class="form-control" rows="4" readonly style="background-color: var(--border-color);">${methodData}</textarea>
+                                     <button class="btn-primary copy-btn" data-copy="${methodData}" style="width:100%; margin-top:10px;"><i data-lucide="copy"></i> <span data-lang-key="copyCode"></span></button>
+                                </div>`;
+                    } else { // text, tel, email
+                        return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                     <h3 class="kpi-title">${methodConfig.label}</h3>
+                                     <div style="display:flex; gap:10px; align-items:center;">
+                                         <strong style="background-color: var(--border-color); padding: 10px; border-radius: 8px; flex-grow:1; text-align: center; overflow-wrap: break-word;">${methodData}</strong>
+                                         <button class="btn-primary copy-btn" data-copy="${methodData}" style="flex-shrink:0;"><i data-lucide="copy"></i></button>
+                                     </div>
+                                </div>`;
+                    }
+                }).join('');
+            }
             
-            // Lógica para generar el código PIX Copia y Pega (BR Code)
-            // Esta es una versión simplificada. Para una implementación real se necesitaría una librería.
-            const payload = `00020126580014br.gov.bcb.pix0136${PIX_KEY_FIXED}520400005303986540550.005802BR5913LUMIX FINANCAS6009SAO PAULO62070503***6304E7DF`;
+            methodsHtml += `
+                 <div class="kpi-card" style="margin-top: 30px;">
+                    <h3 class="section-title" data-lang-key="uploadReceipt"></h3>
+                    <div class="form-group">
+                        <label for="receipt-amount" data-lang-key="paymentAmountLabel"></label>
+                        <input type="number" id="receipt-amount" step="0.01" placeholder="0.00" class="form-control">
+                    </div>
+                     <label for="receipt-file-input" class="upload-receipt-btn">
+                         <i data-lucide="upload-cloud"></i>
+                         <span id="upload-label-text">Clique para anexar</span>
+                         <img id="receipt-preview" style="display:none;">
+                     </label>
+                     <input type="file" id="receipt-file-input" accept="image/*" style="display:none;">
+                     <button class="btn-primary" id="submit-receipt-btn" style="width:100%; margin-top:15px;" disabled><i data-lucide="send"></i> <span data-lang-key="submitForVerification"></span></button>
+                 </div>`;
             
-            copyPasteEl.value = payload;
-            manualKeyEl.textContent = PIX_KEY_MANUAL;
-            
-            // Generar QR Code (usando una API externa para simplicidad)
-            qrCodeEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
+            payViewContainer.innerHTML = methodsHtml;
+            applyLanguage(currentLang);
+            lucide.createIcons({nodes: payViewContainer.querySelectorAll('[data-lucide]')});
         }
 
         function updateRefinanceView() {
@@ -1442,7 +1543,7 @@
             showView(location.hash.substring(1) || 'home');
 
             let isFirstLoad = true;
-            unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
+            unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), async (docSnap) => {
                 if (docSnap.exists()) {
                     let clientData = { id: docSnap.id, ...docSnap.data() };
 
@@ -1477,6 +1578,16 @@
                     
                     currentClient = clientData;
                     
+                    // Cargar la configuración del cobrador ANTES de renderizar las vistas
+                    if (currentClient.collectorId && !collectorSettings) {
+                        try {
+                            const collectorDoc = await getDoc(doc(db, 'collectors', currentClient.collectorId));
+                            if (collectorDoc.exists()) {
+                                collectorSettings = collectorDoc.data();
+                            }
+                        } catch(e) { console.error("Error fetching collector settings", e); }
+                    }
+
                     updateAllViews();
                     if (isFirstLoad) {
                         console.log('[CLIENTE-APP] Primera carga del cliente. Iniciando verificaciones y setup de FCM.');
@@ -1654,13 +1765,12 @@
                 if(target.closest('#clear-notifications-btn')) {
                     handleClearNotifications();
                 }
+
+                const copyButton = target.closest('.copy-btn');
+                if(copyButton && copyButton.dataset.copy) {
+                    copyToClipboard(copyButton.dataset.copy, translations[currentLang].copied);
+                }
                 
-                if(target.closest('#copy-pix-code-btn')) {
-                    copyToClipboard(document.getElementById('pix-copy-paste-code').value, translations[currentLang].copied);
-                }
-                if(target.closest('#copy-manual-key-btn')) {
-                    copyToClipboard(document.getElementById('manual-pix-key-value').textContent, translations[currentLang].copied);
-                }
                 if(target.closest('#submit-receipt-btn')) {
                     handleReceiptSubmission(target.closest('#submit-receipt-btn'));
                 }
@@ -1670,9 +1780,13 @@
                     const notifId = notifItem.dataset.id;
                     if (currentClient) {
                         const clientRef = doc(db, 'clients', currentClient.id);
-                        const updatedNotifications = currentClient.notifications.map((n, index) => 
-                            (n.id || `notif_${index}`) === notifId ? { ...n, read: true } : n
-                        );
+                        const updatedNotifications = currentClient.notifications.map((n, index) => {
+                            const currentNotifId = n.id || `notif_${index}`;
+                            if (currentNotifId === notifId) {
+                                return { ...n, read: true };
+                            }
+                            return n;
+                        });
                         updateDoc(clientRef, { notifications: updatedNotifications })
                             .then(() => showToast(translations[currentLang].notificationRead))
                             .catch(err => console.error("Error marking notification as read", err));
@@ -1900,4 +2014,3 @@
     </script>
 </body>
 </html>
-
