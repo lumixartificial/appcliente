@@ -994,13 +994,16 @@
             const tabsContainer = document.getElementById('loan-tabs-container');
             if (!tabsContainer || !currentClient) return;
 
-            const activeLoans = (currentClient.loans || []).filter(l => l.status === 'active');
+            // [CORRECCIÓN] Mapear primero para conservar el índice original antes de filtrar.
+            const loansWithOriginalIndex = (currentClient.loans || []).map((loan, index) => ({ ...loan, originalIndex: index }));
+            const activeLoans = loansWithOriginalIndex.filter(l => l.status === 'active');
             
             if (activeLoans.length > 1) {
                 tabsContainer.style.display = 'flex';
-                tabsContainer.innerHTML = activeLoans.map((loan, index) => `
-                    <button class="loan-tab ${index === selectedLoanIndex ? 'active' : ''}" data-index="${index}">
-                        ${translations[currentLang].loanLabel} ${index + 1}
+                // [CORRECCIÓN] Usar el 'originalIndex' guardado en el dataset y para la comparación.
+                tabsContainer.innerHTML = activeLoans.map((loan) => `
+                    <button class="loan-tab ${loan.originalIndex === selectedLoanIndex ? 'active' : ''}" data-index="${loan.originalIndex}">
+                        ${translations[currentLang].loanLabel} ${loan.originalIndex + 1}
                     </button>
                 `).join('');
             } else {
@@ -1547,23 +1550,34 @@
                 if (docSnap.exists()) {
                     let clientData = { id: docSnap.id, ...docSnap.data() };
 
-                    // Capa de Compatibilidad: Adapta la estructura de datos antigua a la nueva.
+                    // --- INICIO DE LA REPARACIÓN ---
+                    // Capa de Compatibilidad y Saneamiento de Datos
                     if (!clientData.loans && clientData.totalLoan) {
                         console.warn("[CLIENTE-APP] Estructura de datos antigua detectada. Adaptando a la nueva estructura multi-préstamo.");
                         clientData.loans = [{
                             totalLoan: clientData.totalLoan,
                             paid: clientData.paid || 0,
                             installments: clientData.installments,
-                            originalInstallmentAmount: clientData.originalInstallmentAmount,
-                            totalInstallments: (clientData.installments || "0/0").split('/').map(Number)[1] || 0,
+                            originalInstallmentAmount: clientData.amount, // CORRECCIÓN: Usar 'amount' del formato antiguo
                             startDate: clientData.startDate,
                             history: clientData.history || [],
                             paymentBalance: clientData.paymentBalance || 0,
-                            status: 'active'
                         }];
                     } else if (!clientData.loans) {
                         clientData.loans = [];
                     }
+
+                    // Saneamiento: Asegura que todos los préstamos tengan los campos necesarios y el status correcto
+                    clientData.loans.forEach(loan => {
+                        // 1. Asegura que 'totalInstallments' exista para la barra de progreso
+                        if (loan.installments && typeof loan.totalInstallments === 'undefined') {
+                            loan.totalInstallments = (loan.installments.split('/')[1] || 0) * 1;
+                        }
+                        // 2. Calcula y asigna el status dinámicamente para el filtro de pestañas
+                        const isFinished = (loan.paid || 0) >= (loan.totalLoan || 0) && (loan.totalLoan > 0);
+                        loan.status = isFinished ? 'finished' : 'active';
+                    });
+                    // --- FIN DE LA REPARACIÓN ---
                     
                     currentClient = clientData;
                     
