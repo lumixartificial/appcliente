@@ -1492,15 +1492,24 @@
             lucide.createIcons();
         }
 
-        async function setupFCM() {
-            const LOG_PREFIX = `[CLIENTE-FCM-DIAGNOSTICO]`;
-            console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
-            try {
-                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                    console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
-                    return;
-                }
-                console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
+        
+            async function setupFCM() {
+    const LOG_PREFIX = `[CLIENTE-FCM-DIAGNOSTICO]`;
+    console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
+    try {
+        if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+            console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
+            return;
+        }
+        console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
+
+        // [NUEVA LÍNEA AÑADIDA] Espera a que el SW esté activo
+        console.log(`${LOG_PREFIX} Esperando que el Service Worker esté listo...`);
+        const registration = await navigator.serviceWorker.ready;
+        console.log(`${LOG_PREFIX} ¡Service Worker listo y activo!`, registration);
+
+
+
 
                 const messaging = getMessaging(app);
                 console.log(`${LOG_PREFIX} Objeto de Messaging obtenido.`);
@@ -1537,15 +1546,30 @@
                     if (!existingTokens.includes(currentToken)) {
                         console.log(`${LOG_PREFIX} El token es nuevo. Intentando guardar en Firestore (ruta global)...`);
                         // Define a referência para a ROTA GLOBAL: clients/{clientId}
-                        const clientRefGlobal = doc(db, 'clients', currentClientId);
-                        try {
-                            // Usa arrayUnion para adicionar o novo token sem remover os existentes
-                            await updateDoc(clientRefGlobal, { fcmTokens: arrayUnion(currentToken) });
-                            console.log(`${LOG_PREFIX} ¡ÉXITO! Token nuevo guardado en Firestore (ruta global).`);
-                        } catch (error) {
-                            console.error(`${LOG_PREFIX} ERRO ao salvar token FCM na rota global:`, error);
-                            showToast('Falha ao registrar dispositivo para notificações.', true);
-                        }
+                        
+                    const clientRefGlobal = doc(db, 'clients', currentClientId);
+
+try {
+    // Lee el documento MÁS RECIENTE justo antes de actualizar
+    const clientSnap = await getDoc(clientRefGlobal);
+    const currentData = clientSnap.data() || {}; // Obtiene datos actuales o un objeto vacío
+    const currentTokens = currentData.fcmTokens || []; // Obtiene tokens actuales o array vacío
+
+    // Solo actualiza si el token es realmente nuevo
+    if (!currentTokens.includes(currentToken)) {
+        console.log(`${LOG_PREFIX} El token es nuevo. Intentando guardar en Firestore (ruta global)...`);
+        // Usa arrayUnion para añadir el nuevo token sin remover los existentes
+        await updateDoc(clientRefGlobal, { fcmTokens: arrayUnion(currentToken) });
+        console.log(`${LOG_PREFIX} ¡ÉXITO! Token nuevo guardado en Firestore (ruta global).`);
+    } else {
+        console.log(`${LOG_PREFIX} El token ya existía en Firestore (ruta global). No se requiere acción.`);
+    }
+} catch (error) {
+    console.error(`${LOG_PREFIX} ERRO ao ler/salvar token FCM na rota global:`, error);
+    showToast('Falha ao registrar dispositivo para notificações.', true);
+}
+
+
                     } else {
                          console.log(`${LOG_PREFIX} El token ya existía en Firestore (ruta global). No se requiere acción.`);
                     }
@@ -2440,6 +2464,3 @@ init();
     </script>
 </body>
 </html>
-
-
-
