@@ -2360,67 +2360,89 @@ function showCropperModal(file) {
         if (user) {
             // Usuário logado via Firebase Auth
             try {
-                console.log("[CLIENTE-APP] Usuário Firebase Auth detectado:", user.uid);
-                currentAuthUid = user.uid; // Guarda o Auth UID
+            console.log("[CLIENTE-APP][DIAG] PASO 1: Verificando permissões..."); // <--- AÑADIR LOG
+            const tokenResult = await user.getIdTokenResult(true);
+            // No necesitamos claims aquí para el cliente
 
-                // PASSO CL1: Buscar o documento do cliente usando o Auth UID
-                console.log("[CLIENTE-APP] Buscando documento do cliente com authUid:", currentAuthUid);
-                // Usamos collectionGroup para buscar em todas as subcoleções 'clients'
-                const clientQuery = query(collectionGroup(db, 'clients'), where('authUid', '==', currentAuthUid));
-                const querySnapshot = await getDocs(clientQuery);
+            console.log("[CLIENTE-APP][DIAG] PASO 2: Permissões OK. Buscando documento do cliente..."); // <--- AÑADIR LOG
+            currentAuthUid = user.uid;
+            const clientQuery = query(collectionGroup(db, 'clients'), where('authUid', '==', currentAuthUid));
+            const querySnapshot = await getDocs(clientQuery);
 
-                if (querySnapshot.empty) {
-                    throw new Error("Nenhum registro de cliente encontrado para esta conta. Contate o suporte.");
-                }
-                if (querySnapshot.size > 1) {
-                    // Isso não deveria acontecer se a lógica de criação for correta
-                    console.warn("[CLIENTE-APP] Múltiplos clientes encontrados para o mesmo Auth UID!", querySnapshot.docs.map(d => d.ref.path));
-                    // Por segurança, usamos o primeiro encontrado
-                }
-
-                const clientDoc = querySnapshot.docs[0];
-                currentClientId = clientDoc.id; // ID do documento Firestore
-                currentCompanyId = clientDoc.ref.parent.parent.id;
-                currentClientData = { id: currentClientId, ...clientDoc.data() };
-                currentCollectorId = currentClientData.collectorId;
-
-                console.log(`[CLIENTE-APP] Cliente encontrado! ClientID: ${currentClientId}, CompanyID: ${currentCompanyId}, CollectorID: ${currentCollectorId}`);
-
-                // --- INÍCIO TAREFA CL2: Verificar Status da Empresa ---
-                console.log(`[CLIENTE-APP] Verificando status da empresa: ${currentCompanyId}...`);
-                const companyRef = doc(db, 'companies', currentCompanyId);
-                const companySnap = await getDoc(companyRef); // Usa a ferramenta getDoc
-
-                if (!companySnap.exists()) {
-                    // Isso seria um erro grave se chegamos até aqui
-                    throw new Error(`Erro crítico: A empresa (${currentCompanyId}) associada a este cliente não foi encontrada.`);
-                }
-
-                currentCompanyData = companySnap.data(); // Guarda os dados da empresa (logo, nome, status)
-
-                // ¡A VERIFICAÇÃO DE STATUS!
-                if (currentCompanyData.status === 'suspended') {
-                    const errorMsg = `A conta da sua empresa (${currentCompanyData.name || 'Nome não disponível'}) está suspensa. Entre em contato com o suporte ou seu cobrador.`;
-                    console.warn(`[CLIENTE-APP] ${errorMsg}`);
-                    showBlockedView(errorMsg); // Mostra bloqueio
-                    // Não deslogamos, apenas bloqueamos a app.
-                    return; // Para a execução aqui
-                }
-
-                console.log(`[CLIENTE-APP] Empresa ${currentCompanyData.name} está ativa (Status: ${currentCompanyData.status}).`);
-                // Aplica o logo e nome da empresa na UI (substitui a leitura antiga de config/global)
-                loadGlobalSettings(currentCompanyData);
-                // --- FIM TAREFA CL2 ---
-
-                // Agora sim, chama a função principal
-                console.log("[CLIENTE-APP] Verificações completas OK. Iniciando a app principal...");
-                showMainApp(currentClientId, currentCompanyId);
-
-            } catch (error) {
-                console.error("[CLIENTE-APP] Erro crítico durante a verificação de acesso:", error);
-                showBlockedView(`Ocorreu um erro ao verificar sua conta: ${error.message}`);
-                await signOut(auth).catch(e => console.error("Erro no signOut forçado:", e)); // Tenta deslogar
+            console.log("[CLIENTE-APP][DIAG] PASO 3: Busca CollectionGroup concluída."); // <--- AÑADIR LOG
+            if (querySnapshot.empty) {
+                console.error("[CLIENTE-APP][DIAG] ERRO no PASO 3.1: Nenhum cliente encontrado."); // <--- AÑADIR LOG
+                throw new Error("Nenhum registro de cliente encontrado para esta conta. Contate o suporte.");
             }
+            if (querySnapshot.size > 1) {
+                console.warn("[CLIENTE-APP][DIAG] AVISO no PASO 3.2: Múltiplos clientes encontrados!"); // <--- AÑADIR LOG
+            }
+
+            const clientDoc = querySnapshot.docs[0];
+            console.log("[CLIENTE-APP][DIAG] PASO 4: Documento do cliente obtido:", clientDoc.id); // <--- AÑADIR LOG
+
+            // --- Asignaciones ---
+            console.log("[CLIENTE-APP][DIAG] PASO 5.1: Atribuindo currentClientId..."); // <--- AÑADIR LOG
+            currentClientId = clientDoc.id;
+
+            console.log("[CLIENTE-APP][DIAG] PASO 5.2: Atribuindo currentCompanyId..."); // <--- AÑADIR LOG
+            currentCompanyId = clientDoc.ref.parent.parent.id;
+
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3: Atribuindo currentClientData..."); // <--- AÑADIR LOG
+            // Intenta acceder a .data() aquí para ver si falla
+            const clientDataFromDb = clientDoc.data();
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3.1: clientDoc.data() lido com sucesso."); // <--- AÑADIR LOG
+            currentClientData = { id: currentClientId, ...clientDataFromDb };
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3.2: currentClientData atribuído."); // <--- AÑADIR LOG
+
+
+            console.log("[CLIENTE-APP][DIAG] PASO 5.4: Atribuindo currentCollectorId..."); // <--- AÑADIR LOG
+            // Verifica si currentClientData existe ANTES de leer collectorId
+            if (!currentClientData) throw new Error("Falha interna: currentClientData não foi definido corretamente antes de ler collectorId.");
+            currentCollectorId = currentClientData.collectorId;
+            console.log("[CLIENTE-APP][DIAG] PASO 5.5: IDs atribuídos com sucesso."); // <--- AÑADIR LOG
+
+
+            console.log(`[CLIENTE-APP] Cliente encontrado! ClientID: ${currentClientId}, CompanyID: ${currentCompanyId}, CollectorID: ${currentCollectorId}`); // Log original
+
+            // --- INÍCIO TAREFA CL2: Verificar Status da Empresa ---
+            console.log("[CLIENTE-APP][DIAG] PASO 6: Verificando status da empresa..."); // <--- AÑADIR LOG
+            const companyRef = doc(db, 'companies', currentCompanyId);
+            const companySnap = await getDoc(companyRef);
+
+            console.log("[CLIENTE-APP][DIAG] PASO 7: getDoc(companyRef) concluído."); // <--- AÑADIR LOG
+            if (!companySnap.exists()) {
+                 console.error("[CLIENTE-APP][DIAG] ERRO no PASO 7.1: Documento da empresa não existe."); // <--- AÑADIR LOG
+                throw new Error(`Erro crítico: A empresa (${currentCompanyId}) associada a este cliente não foi encontrada.`);
+            }
+
+            console.log("[CLIENTE-APP][DIAG] PASO 8: Atribuindo currentCompanyData..."); // <--- AÑADIR LOG
+            currentCompanyData = companySnap.data(); // Guarda os dados da empresa
+            console.log("[CLIENTE-APP][DIAG] PASO 8.1: currentCompanyData (empresa) atribuído."); // <--- AÑADIR LOG
+
+            // ¡A VERIFICAÇÃO DE STATUS!
+            console.log("[CLIENTE-APP][DIAG] PASO 9: Verificando currentCompanyData.status..."); // <--- AÑADIR LOG
+            if (currentCompanyData.status === 'suspended') {
+                // ... (código de bloqueo sin cambios) ...
+                return;
+            }
+
+            console.log(`[CLIENTE-APP] Empresa ${currentCompanyData.name} está ativa (Status: ${currentCompanyData.status}).`); // Log original
+            console.log("[CLIENTE-APP][DIAG] PASO 10: Chamando loadGlobalSettings..."); // <--- AÑADIR LOG
+            loadGlobalSettings(currentCompanyData);
+            // --- FIM TAREFA CL2 ---
+
+            console.log("[CLIENTE-APP][DIAG] PASO 11: Chamando showMainApp..."); // <--- AÑADIR LOG
+            showMainApp(currentClientId, currentCompanyId);
+
+        } catch (error) { // <-- Bloque Catch original
+            // El console.error original ya está aquí (linha ~1758)
+            console.error("[CLIENTE-APP] Erro crítico durante a verificação de acesso:", error);
+            // El showBlockedView original ya está aquí (linha ~1759)
+            showBlockedView(`Ocorreu um erro ao verificar sua conta: ${error.message}`);
+            // El signOut original ya está aquí (linha ~1760)
+            await signOut(auth).catch(e => console.error("Erro no signOut forçado:", e));
+        }
 
         } else {
             // Usuário NÃO está logado no Firebase Auth
@@ -2454,4 +2476,3 @@ init();
     </script>
 </body>
 </html>
-
