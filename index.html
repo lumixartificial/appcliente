@@ -2382,74 +2382,71 @@ function showCropperModal(file) {
             console.log("[CLIENTE-APP][DIAG] PASO 4: Documento do cliente obtido:", clientDoc.id); // <--- AÑADIR LOG
 
             // --- Asignaciones ---
-            console.log("[CLIENTE-APP][DIAG] PASO 5.1: Atribuindo currentClientId..."); // <--- AÑADIR LOG
-            currentClientId = clientDoc.id;
+            
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.2: Atribuindo currentCompanyId..."); // <--- AÑADIR LOG
-            currentCompanyId = clientDoc.ref.parent.parent.id;
+            // PASO CL1: Obtener IDs y Datos del CLIENTE
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 5.1: Obtendo IDs...");
+            currentClientId = clientDoc.id; // ID del Documento Firestore del Cliente
+            currentCompanyId = clientDoc.ref.parent.parent.id; // ID de la Empresa (desde la ruta)
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3: Lendo dados do documento do cliente..."); // Log Modificado
-
-            // --- INICIO CORRECCIÓN DEFINITIVA ---
-            let clientDataFromDb; // Declara la variable fuera del try/catch anidado
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 5.2: Lendo dados do cliente...");
+            let clientDataFromDb;
             try {
-                clientDataFromDb = clientDoc.data(); // Intenta leer los datos
+                clientDataFromDb = clientDoc.data(); // Lee los datos
             } catch (dataError) {
-                // Si .data() falla, lanza un error específico
-                console.error("[CLIENTE-APP][DIAG] ERRO no PASO 5.3.1: Falha ao ler clientDoc.data()!", dataError);
+                console.error("[CLIENTE-APP][DIAG-V3] ERRO no PASO 5.2.1: Falha ao ler clientDoc.data()!", dataError);
                 throw new Error(`Falha ao ler dados do cliente (${clientDoc.id}): ${dataError.message}`);
             }
-
-            // Verifica si data() devolvió undefined o null (documento vacío?)
             if (!clientDataFromDb) {
-                console.error("[CLIENTE-APP][DIAG] ERRO no PASO 5.3.1: clientDoc.data() retornou vazio (undefined/null).");
+                console.error("[CLIENTE-APP][DIAG-V3] ERRO no PASO 5.2.2: clientDoc.data() retornou vazio.");
                 throw new Error(`Dados do cliente (${clientDoc.id}) estão vazios ou corruptos.`);
             }
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 5.2.3: clientDoc.data() lido com sucesso.");
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3.1: clientDoc.data() lido com sucesso.");
-            currentClientData = { id: currentClientId, ...clientDataFromDb }; // Asigna DESPUÉS de verificar
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3.2: currentClientData atribuído.");
+            // Guarda los datos del CLIENTE en la variable global 'currentClient' (usada por el resto de la app)
+            // Usamos 'currentClient' en lugar de 'currentClientData' para evitar conflictos.
+            currentClient = { id: currentClientId, ...clientDataFromDb };
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 5.3: Variável global 'currentClient' atribuída:", currentClient);
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.4: Atribuindo currentCollectorId...");
-            // La verificación !currentClientData ya no es necesaria aquí porque la hicimos arriba
-            currentCollectorId = currentClientData.collectorId;
-            if (currentCollectorId === undefined) { // Verifica si el CAMPO collectorId existe
-                 console.warn(`[CLIENTE-APP][DIAG] AVISO no PASO 5.4.1: O campo 'collectorId' não existe no documento do cliente.`);
-                 // Decide qué hacer: lanzar error o continuar con collectorId = null/undefined
-                 // throw new Error("Campo 'collectorId' não encontrado nos dados do cliente.");
+            // Obtén el collectorId DESDE 'currentClient' que acabamos de definir
+            currentCollectorId = currentClient.collectorId;
+            if (currentCollectorId === undefined) {
+                 console.warn(`[CLIENTE-APP][DIAG-V3] AVISO no PASO 5.4: Campo 'collectorId' não encontrado no cliente.`);
+                 // Considera si esto debe ser un error o si puede continuar
             }
-            console.log("[CLIENTE-APP][DIAG] PASO 5.5: IDs atribuídos com sucesso.");
-            // --- FIN CORRECCIÓN DEFINITIVA ---
+            console.log(`[CLIENTE-APP] IDs Obtidos: ClientID=${currentClientId}, CompanyID=${currentCompanyId}, CollectorID=${currentCollectorId}`);
 
 
-            console.log(`[CLIENTE-APP] Cliente encontrado! ClientID: ${currentClientId}, CompanyID: ${currentCompanyId}, CollectorID: ${currentCollectorId}`); // Log original
-
-            // --- INÍCIO TAREFA CL2: Verificar Status da Empresa ---
-            console.log("[CLIENTE-APP][DIAG] PASO 6: Verificando status da empresa..."); // <--- AÑADIR LOG
+            // PASO CL2: Obtener Datos y Verificar Status da EMPRESA
+            console.log(`[CLIENTE-APP][DIAG-V3] PASO 6: Verificando status da empresa: ${currentCompanyId}...`);
             const companyRef = doc(db, 'companies', currentCompanyId);
             const companySnap = await getDoc(companyRef);
 
-            console.log("[CLIENTE-APP][DIAG] PASO 7: getDoc(companyRef) concluído."); // <--- AÑADIR LOG
             if (!companySnap.exists()) {
-                 console.error("[CLIENTE-APP][DIAG] ERRO no PASO 7.1: Documento da empresa não existe."); // <--- AÑADIR LOG
+                console.error("[CLIENTE-APP][DIAG-V3] ERRO no PASO 6.1: Documento da empresa não existe.");
                 throw new Error(`Erro crítico: A empresa (${currentCompanyId}) associada a este cliente não foi encontrada.`);
             }
 
-            console.log("[CLIENTE-APP][DIAG] PASO 8: Atribuindo currentCompanyData..."); // <--- AÑADIR LOG
-            currentCompanyData = companySnap.data(); // Guarda os dados da empresa
-            console.log("[CLIENTE-APP][DIAG] PASO 8.1: currentCompanyData (empresa) atribuído."); // <--- AÑADIR LOG
+            // Guarda los datos de la EMPRESA en la variable global 'currentCompanyData'
+            currentCompanyData = companySnap.data();
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 6.2: Dados da empresa ('currentCompanyData') obtidos.");
 
-            // ¡A VERIFICAÇÃO DE STATUS!
-            console.log("[CLIENTE-APP][DIAG] PASO 9: Verificando currentCompanyData.status..."); // <--- AÑADIR LOG
+            // Verificación de STATUS usando 'currentCompanyData' (que ahora sí tiene datos de la empresa)
             if (currentCompanyData.status === 'suspended') {
-                // ... (código de bloqueo sin cambios) ...
-                return;
+                const errorMsg = `A conta da sua empresa (${currentCompanyData.name || 'Nome não disponível'}) está suspensa...`;
+                console.warn(`[CLIENTE-APP] ${errorMsg}`);
+                showBlockedView(errorMsg);
+                return; // Detiene aquí si está suspendida
             }
+            console.log(`[CLIENTE-APP] Empresa ${currentCompanyData.name} está ativa (Status: ${currentCompanyData.status}).`);
 
-            console.log(`[CLIENTE-APP] Empresa ${currentCompanyData.name} está ativa (Status: ${currentCompanyData.status}).`); // Log original
-            console.log("[CLIENTE-APP][DIAG] PASO 10: Chamando loadGlobalSettings..."); // <--- AÑADIR LOG
+            // Aplica logo/nome da EMPRESA usando 'currentCompanyData'
             loadGlobalSettings(currentCompanyData);
-            // --- FIM TAREFA CL2 ---
+            console.log("[CLIENTE-APP][DIAG-V3] PASO 7: Configurações globais (logo/nome) aplicadas.");
+
+            // --- FIN: CORRECCIÓN DEFINITIVA TAREAS CL1 y CL2 ---
+
+
 
             console.log("[CLIENTE-APP][DIAG] PASO 11: Chamando showMainApp..."); // <--- AÑADIR LOG
             showMainApp(currentClientId, currentCompanyId);
