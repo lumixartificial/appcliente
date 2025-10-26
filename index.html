@@ -1638,8 +1638,8 @@
     // TODO: Cancelar outros listeners (expenses, settlements) se eles também forem definidos globalmente.
 
     // Agora, usamos o authUid para encontrar o documento do cobrador correto
-    console.log(`[COBRADOR-APP] Buscando documento do cobrador com authUid: ${authUid}...`);
-    const collectorQuery = query(collection(db, 'collectors'), where('authUid', '==', authUid));
+    console.log(`[CLIENTE-APP] Buscando documento do cobrador com authUid: ${currentAuthUid}...`); // <-- Usa global currentAuthUid
+    const collectorQuery = query(collection(db, 'collectors'), where('authUid', '==', currentAuthUid)); // <-- Usa global currentAuthUid
 
     // Usamos getDocs UMA VEZ para obter o username (ID do doc) e depois onSnapshot
     getDocs(collectorQuery).then(snapshot => {
@@ -2492,3 +2492,4 @@ init();
     </script>
 </body>
 </html>
+
