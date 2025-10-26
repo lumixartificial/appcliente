@@ -1594,7 +1594,7 @@
             }
         }
 
-        function showMainApp(authUid) { // Recebe o UID de Auth
+        function showMainApp(clientId, companyId) { // Recebe o UID de Auth
     if (!authUid) { // Segurança extra
         console.error("[COBRADOR-APP] showMainApp chamada sem authUid!");
         showBlockedView("Erro interno: ID do usuário não encontrado.");
@@ -1638,13 +1638,15 @@
     // TODO: Cancelar outros listeners (expenses, settlements) se eles também forem definidos globalmente.
 
     // Agora, usamos o authUid para encontrar o documento do cobrador correto
-    console.log(`[CLIENTE-APP] Buscando documento do cobrador com authUid: ${currentAuthUid}...`); // <-- Usa global currentAuthUid
-    const collectorQuery = query(collection(db, 'collectors'), where('authUid', '==', currentAuthUid)); // <-- Usa global currentAuthUid
+    
+    console.log(`[CLIENTE-APP] Buscando documento do cobrador com authUid: ${currentAuthUid}...`); // <-- CORREGIDO: Usa global currentAuthUid
+    const collectorQuery = query(collection(db, 'collectors'), where('authUid', '==', currentAuthUid)); // <-- CORREGIDO: Usa global currentAuthUid
+
 
     // Usamos getDocs UMA VEZ para obter o username (ID do doc) e depois onSnapshot
     getDocs(collectorQuery).then(snapshot => {
         if (snapshot.empty) {
-            console.error(`[COBRADOR-APP] Nenhum documento de cobrador encontrado para authUid: ${authUid}`);
+            console.error(`[CLIENTE-APP] Nenhum documento de cobrador encontrado para authUid: ${currentAuthUid}`); // <-- CORREGIDO
             showBlockedView("Erro: Dados do cobrador não encontrados no banco de dados.");
             signOut(auth);
             return;
@@ -1781,7 +1783,7 @@
         // --- FIM TAREFA C2: Monitores movidos ---
 
     }).catch(error => { // Catch do getDocs para buscar o cobrador
-         console.error("[COBRADOR-APP] Erro crítico ao buscar documento do cobrador por authUid:", error);
+         console.error("[CLIENTE-APP] Erro crítico ao buscar documento do cobrador por authUid:", error); // <-- CORREGIDO
          showBlockedView("Erro crítico ao carregar seus dados iniciais.");
          signOut(auth);
     }); // Fim do getDocs().catch()
@@ -2492,4 +2494,5 @@ init();
     </script>
 </body>
 </html>
+
 
