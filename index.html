@@ -2388,19 +2388,38 @@ function showCropperModal(file) {
             console.log("[CLIENTE-APP][DIAG] PASO 5.2: Atribuindo currentCompanyId..."); // <--- AÑADIR LOG
             currentCompanyId = clientDoc.ref.parent.parent.id;
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3: Atribuindo currentClientData..."); // <--- AÑADIR LOG
-            // Intenta acceder a .data() aquí para ver si falla
-            const clientDataFromDb = clientDoc.data();
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3.1: clientDoc.data() lido com sucesso."); // <--- AÑADIR LOG
-            currentClientData = { id: currentClientId, ...clientDataFromDb };
-            console.log("[CLIENTE-APP][DIAG] PASO 5.3.2: currentClientData atribuído."); // <--- AÑADIR LOG
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3: Lendo dados do documento do cliente..."); // Log Modificado
 
+            // --- INICIO CORRECCIÓN DEFINITIVA ---
+            let clientDataFromDb; // Declara la variable fuera del try/catch anidado
+            try {
+                clientDataFromDb = clientDoc.data(); // Intenta leer los datos
+            } catch (dataError) {
+                // Si .data() falla, lanza un error específico
+                console.error("[CLIENTE-APP][DIAG] ERRO no PASO 5.3.1: Falha ao ler clientDoc.data()!", dataError);
+                throw new Error(`Falha ao ler dados do cliente (${clientDoc.id}): ${dataError.message}`);
+            }
 
-            console.log("[CLIENTE-APP][DIAG] PASO 5.4: Atribuindo currentCollectorId..."); // <--- AÑADIR LOG
-            // Verifica si currentClientData existe ANTES de leer collectorId
-            if (!currentClientData) throw new Error("Falha interna: currentClientData não foi definido corretamente antes de ler collectorId.");
+            // Verifica si data() devolvió undefined o null (documento vacío?)
+            if (!clientDataFromDb) {
+                console.error("[CLIENTE-APP][DIAG] ERRO no PASO 5.3.1: clientDoc.data() retornou vazio (undefined/null).");
+                throw new Error(`Dados do cliente (${clientDoc.id}) estão vazios ou corruptos.`);
+            }
+
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3.1: clientDoc.data() lido com sucesso.");
+            currentClientData = { id: currentClientId, ...clientDataFromDb }; // Asigna DESPUÉS de verificar
+            console.log("[CLIENTE-APP][DIAG] PASO 5.3.2: currentClientData atribuído.");
+
+            console.log("[CLIENTE-APP][DIAG] PASO 5.4: Atribuindo currentCollectorId...");
+            // La verificación !currentClientData ya no es necesaria aquí porque la hicimos arriba
             currentCollectorId = currentClientData.collectorId;
-            console.log("[CLIENTE-APP][DIAG] PASO 5.5: IDs atribuídos com sucesso."); // <--- AÑADIR LOG
+            if (currentCollectorId === undefined) { // Verifica si el CAMPO collectorId existe
+                 console.warn(`[CLIENTE-APP][DIAG] AVISO no PASO 5.4.1: O campo 'collectorId' não existe no documento do cliente.`);
+                 // Decide qué hacer: lanzar error o continuar con collectorId = null/undefined
+                 // throw new Error("Campo 'collectorId' não encontrado nos dados do cliente.");
+            }
+            console.log("[CLIENTE-APP][DIAG] PASO 5.5: IDs atribuídos com sucesso.");
+            // --- FIN CORRECCIÓN DEFINITIVA ---
 
 
             console.log(`[CLIENTE-APP] Cliente encontrado! ClientID: ${currentClientId}, CompanyID: ${currentCompanyId}, CollectorID: ${currentCollectorId}`); // Log original
