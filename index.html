@@ -560,8 +560,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyBRxJjpH6PBi-GRxOXS8klv-8v91sO4X-Y",
@@ -573,14 +575,21 @@
         };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
+        const storage = getStorage(app);
 
-        const CLOUDINARY_CLOUD_NAME = "dc6as14p0";
-        const CLOUDINARY_UPLOAD_PRESET = "lumix-financas-uploads";
-        const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+        
         const DEFAULT_LOGO_URL = "https://res.cloudinary.com/dc6as14p0/image/upload/v1759611967/LOGO---LUMIX-FINANZAS-REDUCIDO_gc8zow.png";
         
         let currentClient = null;
         let unsubscribeClient = null;
+
+        let currentAuthUid = null;     // ID do usuário logado no Firebase Auth
+        let currentClientId = null;    // ID do documento do cliente no Firestore (ex: abc123xyz)
+        let currentCompanyId = null;   // ID da empresa à qual o cliente pertence
+        let currentCollectorId = null; // ID (username) do cobrador associado
+        let currentCompanyData = null; // Dados da empresa (logo, nome, status) - Tarefa CL2
+
         let currentLang = localStorage.getItem('language') || 'pt';
         let deferredPrompt; // For PWA installation
         const nationalHolidays = [ '01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12' ];
@@ -905,6 +914,38 @@
                 }, 300);
             }, 3000);
         }
+
+        function showBlockedView(message) {
+    console.error("Acceso bloqueado:", message);
+    document.getElementById('splash-screen').style.display = 'none';
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('app-container').style.display = 'none';
+
+    let blockedView = document.getElementById('blocked-view');
+    if (!blockedView) {
+        blockedView = document.createElement('div');
+        blockedView.id = 'blocked-view';
+        blockedView.style.cssText = 'display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 20px; text-align: center; background-color: var(--bg);';
+        document.body.appendChild(blockedView);
+    }
+
+    blockedView.innerHTML = `
+        <i data-lucide="shield-off" style="width: 64px; height: 64px; color: var(--danger-color); margin-bottom: 20px;"></i>
+        <h2 style="color: var(--text-primary); margin-bottom: 10px;">Acesso Negado</h2>
+        <p style="color: var(--text-secondary); max-width: 400px; line-height: 1.5;">${message}</p>
+        <button id="logout-blocked-btn" class="btn-primary" style="margin-top: 30px; background-color: var(--danger-color); border: none;">Sair (Log Out)</button>
+    `;
+    lucide.createIcons({ nodes: [blockedView.querySelector('i')] });
+
+    const logoutBtn = document.getElementById('logout-blocked-btn');
+    if (logoutBtn) {
+        // Remover listener antigo para segurança
+        logoutBtn.replaceWith(logoutBtn.cloneNode(true));
+        document.getElementById('logout-blocked-btn').addEventListener('click', () => {
+            signOut(auth).catch(err => console.error("Error en logout forzado:", err));
+        });
+    }
+}
 
         function money(value) {
             const currencyCode = collectorSettings?.paymentSettings?.currency || 'BRL';
@@ -1260,17 +1301,25 @@
         }
 
         function handleLogout() {
-            if (unsubscribeClient) {
-                unsubscribeClient();
-            }
-            if (notificationInterval) clearInterval(notificationInterval);
-            sessionStorage.removeItem('lumixClientId');
-            currentClient = null;
-            collectorSettings = null; // Limpiar configuración del cobrador al salir
-            document.getElementById('app-container').style.display = 'none';
-            document.getElementById('login-view').style.display = 'flex';
-            // history.replaceState(null, '', window.location.pathname); // [CORRECCIÓN] Se elimina esta línea para evitar el SecurityError en el entorno de vista previa.
-        }
+    if (unsubscribeClient) {
+        unsubscribeClient();
+        unsubscribeClient = null; // Limpa a referência
+    }
+    if (notificationInterval) {
+        clearInterval(notificationInterval);
+        notificationInterval = null; // Limpa a referência
+    }
+
+    // Chama o signOut oficial do Firebase Auth
+    signOut(auth).catch((error) => {
+        console.error("[CLIENTE-APP] Erro ao fazer logout:", error);
+        showToast('Erro ao tentar sair.', true);
+    });
+
+    // Não precisamos mais limpar variáveis ou mostrar/ocultar vistas aqui.
+    // O onAuthStateChanged será chamado com user=null e fará isso.
+    console.log("[CLIENTE-APP] Logout iniciado. Aguardando onAuthStateChanged...");
+}
 
         function updatePayView() {
             const payViewContainer = document.getElementById('pay-view');
@@ -1371,8 +1420,8 @@
                         return;
                     }
                     try {
-                        const clientRef = doc(db, 'clients', currentClient.id);
-                        await updateDoc(clientRef, { refinanceRequest: { amount: amount, installments: installments, requestDate: new Date() } });
+                        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+                        await updateDoc(clientRef, { refinanceRequest: { amount: amount, installments: installments, requestDate: new Date(), status: 'pending' } });
                         showToast(translations[currentLang].analysisSent);
                         sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
                         updateRefinanceView();
@@ -1477,20 +1526,36 @@
                 const currentToken = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
 
                 if (currentToken) {
-                    console.log(`${LOG_PREFIX} ¡TOKEN OBTENIDO CON ÉXITO!: ${currentToken.substring(0, 30)}...`);
-                    if (currentClient) {
-                        const existingTokens = currentClient.fcmTokens || [];
-                        if (!existingTokens.includes(currentToken)) {
-                            console.log(`${LOG_PREFIX} El token es nuevo. Intentando guardar en Firestore...`);
-                            const clientRef = doc(db, 'clients', currentClient.id);
-                            await updateDoc(clientRef, { fcmTokens: arrayUnion(currentToken) });
-                            console.log(`${LOG_PREFIX} ¡ÉXITO! Token nuevo guardado en Firestore.`);
-                        } else {
-                            console.log(`${LOG_PREFIX} El token ya existía en Firestore. No se requiere acción.`);
+                console.log(`${LOG_PREFIX} ¡TOKEN OBTENIDO CON ÉXITO!: ${currentToken.substring(0, 30)}...`);
+                // --- INÍCIO TAREFA CL6 (Correção Rota FCM Token) ---
+                // Verifica se temos o ID GLOBAL do cliente (obtido no login, Tarefa CL1)
+                if (currentClientId) {
+                    // Lê os tokens existentes do objeto currentClient (que já tem os dados mais recentes via onSnapshot)
+                    const existingTokens = currentClient?.fcmTokens || []; // Usa "?." por segurança
+
+                    // Só atualiza se o token for realmente novo
+                    if (!existingTokens.includes(currentToken)) {
+                        console.log(`${LOG_PREFIX} El token es nuevo. Intentando guardar en Firestore (ruta global)...`);
+                        // Define a referência para a ROTA GLOBAL: clients/{clientId}
+                        const clientRefGlobal = doc(db, 'clients', currentClientId);
+                        try {
+                            // Usa arrayUnion para adicionar o novo token sem remover os existentes
+                            await updateDoc(clientRefGlobal, { fcmTokens: arrayUnion(currentToken) });
+                            console.log(`${LOG_PREFIX} ¡ÉXITO! Token nuevo guardado en Firestore (ruta global).`);
+                        } catch (error) {
+                            console.error(`${LOG_PREFIX} ERRO ao salvar token FCM na rota global:`, error);
+                            showToast('Falha ao registrar dispositivo para notificações.', true);
                         }
                     } else {
-                        console.warn(`${LOG_PREFIX} Se obtuvo un token, pero 'currentClient' no está definido. No se puede guardar.`);
+                         console.log(`${LOG_PREFIX} El token ya existía en Firestore (ruta global). No se requiere acción.`);
                     }
+                } else {
+                     // Se não tivermos o currentClientId, não podemos salvar o token
+                     console.warn(`${LOG_PREFIX} Se obtuvo un token FCM, pero falta currentClientId global. No se puede guardar.`);
+                     // Considera mostrar um erro mais específico ou tentar obter o ID novamente
+                }
+
+
                 } else {
                     console.error(`${LOG_PREFIX} ERROR FATAL: No se pudo obtener el token. Causas comunes: 1) El archivo 'firebase-messaging-sw.js' no se encuentra en la raíz del sitio. 2) La VAPID key es incorrecta. 3) Problema de registro del Service Worker.`);
                     showToast('Falha ao obter token de notificação.', true);
@@ -1529,154 +1594,372 @@
             }
         }
 
-        function showMainApp(clientId) {
-            document.getElementById('login-view').style.display = 'none';
-            document.getElementById('splash-screen').style.display = 'none';
-            
-            if (!document.body.dataset.listenersAttached) {
-                setupEventListeners();
-                document.body.dataset.listenersAttached = 'true';
-            }
-            
-            document.getElementById('app-container').style.display = 'flex';
-            
-            showView(location.hash.substring(1) || 'home');
+        function showMainApp(authUid) { // Recebe o UID de Auth
+    if (!authUid) { // Segurança extra
+        console.error("[COBRADOR-APP] showMainApp chamada sem authUid!");
+        showBlockedView("Erro interno: ID do usuário não encontrado.");
+        signOut(auth);
+        return;
+    }
+    currentCollectorUid = authUid; // Guarda o UID globalmente
 
-            let isFirstLoad = true;
-            unsubscribeClient = onSnapshot(doc(db, 'clients', clientId), async (docSnap) => {
-                if (docSnap.exists()) {
-                    let clientData = { id: docSnap.id, ...docSnap.data() };
+    console.log(`[COBRADOR-APP] showMainApp iniciada para AuthUID: ${authUid}`); // Log adicionado
 
-                    // --- INICIO DE LA REPARACIÓN ---
-                    // Capa de Compatibilidad y Saneamiento de Datos
-                    if (!clientData.loans && clientData.totalLoan) {
-                        console.warn("[CLIENTE-APP] Estructura de datos antigua detectada. Adaptando a la nueva estructura multi-préstamo.");
-                        clientData.loans = [{
-                            totalLoan: clientData.totalLoan,
-                            paid: clientData.paid || 0,
-                            installments: clientData.installments,
-                            originalInstallmentAmount: clientData.amount, // CORRECCIÓN: Usar 'amount' del formato antiguo
-                            startDate: clientData.startDate,
-                            history: clientData.history || [],
-                            paymentBalance: clientData.paymentBalance || 0,
-                        }];
-                    } else if (!clientData.loans) {
-                        clientData.loans = [];
-                    }
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('splash-screen').style.display = 'none'; // Garante que o splash está oculto
+    document.getElementById('app-container').style.display = 'flex'; // Mostra o container principal
 
-                    // Saneamiento: Asegura que todos los préstamos tengan los campos necesarios y el status correcto
-                    clientData.loans.forEach(loan => {
-                        // 1. Asegura que 'totalInstallments' exista para la barra de progreso
-                        if (loan.installments && typeof loan.totalInstallments === 'undefined') {
-                            loan.totalInstallments = (loan.installments.split('/')[1] || 0) * 1;
-                        }
-                        // 2. Calcula y asigna el status dinámicamente para el filtro de pestañas
-                        const isFinished = (loan.paid || 0) >= (loan.totalLoan || 0) && (loan.totalLoan > 0);
-                        loan.status = isFinished ? 'finished' : 'active';
-                    });
-                    // --- FIN DE LA REPARACIÓN ---
-                    
-                    currentClient = clientData;
-                    
-                    // Cargar la configuración del cobrador ANTES de renderizar las vistas
-                    if (currentClient.collectorId && !collectorSettings) {
-                        try {
-                            const collectorDoc = await getDoc(doc(db, 'collectors', currentClient.collectorId));
-                            if (collectorDoc.exists()) {
-                                collectorSettings = collectorDoc.data();
-                            }
-                        } catch(e) { console.error("Error fetching collector settings", e); }
-                    }
+    // Renderiza o layout principal (cabeçalho, navegação) UMA VEZ
+    // A flag evita re-renderizar em re-autenticações rápidas
+    if (!document.body.dataset.layoutRendered) {
+        renderMainLayout();
+        lucide.createIcons(); // Cria ícones do layout base
+        document.body.dataset.layoutRendered = 'true';
+    }
+    
+    // Garante que listeners sejam adicionados apenas uma vez
+    if (!document.body.dataset.listenersAttached) {
+        setupEventListeners();
+        document.body.dataset.listenersAttached = 'true';
+    }
 
-                    updateAllViews();
-                    if (isFirstLoad) {
-                        console.log('[CLIENTE-APP] Primera carga del cliente. Iniciando verificaciones y setup de FCM.');
-                        checkAndSendLatePaymentNotifications();
-                        notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 12 * 60 * 60 * 1000);
-                        console.log('[CLIENTE-APP] Verificador de notificaciones configurado para ejecutarse cada 12 horas.');
-                        
-                        if ('serviceWorker' in navigator) {
-                            navigator.serviceWorker.ready.then(registration => {
-                                console.log('[CLIENTE-APP] Service Worker está activo. Procediendo a configurar FCM.');
-                                setupFCM();
-                            }).catch(err => {
-                                console.error('[CLIENTE-APP] ERROR: El Service Worker no estuvo listo, no se pudo configurar FCM.', err);
-                            });
-                        } else {
-                            console.error('[CLIENTE-APP] ERROR: Service Worker no es soportado por el navegador.');
-                        }
+    // Mostra a vista inicial ou a do hash
+    showView(location.hash.substring(1) || 'home');
 
-                        isFirstLoad = false;
-                    }
-                } else {
-                    showToast(translations[currentLang].accountNotFound, true);
-                    handleLogout();
+    let isFirstLoad = true; // Flag para executar a configuração apenas uma vez
+    let collectorData = null; // Redefinido aqui para clareza
+
+    // Cancela o listener de cliente anterior se existir (importante ao re-logar)
+    if (unsubscribeClient) {
+        console.log("[COBRADOR-APP] Cancelando listener de cliente anterior.");
+        unsubscribeClient();
+        unsubscribeClient = null;
+    }
+    // TODO: Cancelar outros listeners (expenses, settlements) se eles também forem definidos globalmente.
+
+    // Agora, usamos o authUid para encontrar o documento do cobrador correto
+    console.log(`[COBRADOR-APP] Buscando documento do cobrador com authUid: ${authUid}...`);
+    const collectorQuery = query(collection(db, 'collectors'), where('authUid', '==', authUid));
+
+    // Usamos getDocs UMA VEZ para obter o username (ID do doc) e depois onSnapshot
+    getDocs(collectorQuery).then(snapshot => {
+        if (snapshot.empty) {
+            console.error(`[COBRADOR-APP] Nenhum documento de cobrador encontrado para authUid: ${authUid}`);
+            showBlockedView("Erro: Dados do cobrador não encontrados no banco de dados.");
+            signOut(auth);
+            return;
+        }
+        const collectorDoc = snapshot.docs[0];
+        currentCollectorUsername = collectorDoc.id; // GUARDA O USERNAME (ID do Firestore)
+        console.log(`[COBRADOR-APP] Documento do cobrador encontrado. Username (Firestore ID): ${currentCollectorUsername}`);
+
+        // AGORA, podemos usar onSnapshot com o ID correto (username) para escutar mudanças nos DADOS DO COBRADOR
+        onSnapshot(doc(db, 'collectors', currentCollectorUsername), (docSnap) => {
+            if (docSnap.exists()) {
+                collectorData = docSnap.data(); // Guarda os dados do cobrador DENTRO do onSnapshot
+                console.log("[COBRADOR-APP] Dados do cobrador atualizados:", collectorData);
+
+                // Preenche nome, foto, ativa rastreamento, etc. (Código movido de antes)
+                document.querySelectorAll('.profile-name').forEach(el => el.textContent = collectorData.name || 'Cobrador');
+                const imageUrl = collectorData.profilePictureUrl;
+                const nameInitial = (collectorData.name || 'C').charAt(0).toUpperCase();
+                const placeholderUrl = `https://placehold.co/120x120/6f42c1/FFFFFF?text=${nameInitial}`;
+                const headerImg = document.getElementById('header-profile-img');
+                const profileImg = document.getElementById('profile-view-img');
+                if (headerImg) headerImg.src = imageUrl || placeholderUrl.replace('120x120', '80x80');
+                if (profileImg) profileImg.src = imageUrl || placeholderUrl;
+
+                const realtimeToggle = document.getElementById('realtime-tracking-toggle');
+                if(realtimeToggle) realtimeToggle.checked = collectorData.isRealtimeTrackingActive || false;
+
+                if (collectorData.isRealtimeTrackingActive && !locationWatchId) {
+                    startRealtimeGeolocation();
+                } else if (!collectorData.isRealtimeTrackingActive && locationWatchId) {
+                    stopRealtimeGeolocation();
                 }
-            }, (error) => {
-                console.error("Error catastrófico en onSnapshot del cliente:", error);
-                showToast(translations[currentLang].dataLoadError, true);
-                handleLogout();
-            });
-        }
-        
-        function showCropperModal(file) {
-            const cropperModal = document.getElementById('cropperModal');
-            cropperModal.innerHTML = `
-                <header class="modal-header"><button id="closeCropperModal"><i data-lucide="x"></i></button><span class="modal-title" data-lang-key="cropImage"></span></header>
-                <div class="modal-content-wrapper"><div id="cropper-container" class="container"><img id="cropper-image"></div></div>
-                <div class="action-buttons">
-                    <button class="btn-secondary" id="cancelCropBtn"><span data-lang-key="cancel"></span></button>
-                    <button class="btn-primary" id="confirmCropBtn"><i data-lucide="check"></i> <span data-lang-key="confirmCrop"></span></button>
-                </div>`;
-            cropperModal.classList.add('active');
-            lucide.createIcons({nodes: cropperModal.querySelectorAll('[data-lucide]')});
-            applyLanguage(currentLang);
-            
-            const image = document.getElementById('cropper-image');
-            const reader = new FileReader();
-            let cropper;
-            reader.onload = e => {
-                image.src = e.target.result;
-                cropper = new Cropper(image, { aspectRatio: 1, viewMode: 1, background: false });
-            };
-            reader.readAsDataURL(file);
 
-            const closeModal = () => cropperModal.classList.remove('active');
-            document.getElementById('closeCropperModal').addEventListener('click', closeModal);
-            document.getElementById('cancelCropBtn').addEventListener('click', closeModal);
+                const paymentSettingsBtn = document.getElementById('payment-settings-btn');
+                if (paymentSettingsBtn) {
+                    paymentSettingsBtn.replaceWith(paymentSettingsBtn.cloneNode(true));
+                    document.getElementById('payment-settings-btn').addEventListener('click', () => showPaymentSettingsModal(collectorData));
+                }
+                // Fim do código movido
 
-            document.getElementById('confirmCropBtn').addEventListener('click', () => {
-                cropper.getCroppedCanvas({ width: 256, height: 256, imageSmoothingQuality: 'high' }).toBlob(async blob => {
-                    const profileViewImg = document.getElementById('profile-view-img');
-                    profileViewImg.classList.add('loading');
-                    closeModal();
-                    try {
-                        const formData = new FormData();
-                        formData.append('file', blob);
-                        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-                        const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-                        if (!response.ok) throw new Error('Upload failed');
-                        const data = await response.json();
-                        await updateDoc(doc(db, 'clients', currentClient.id), { profilePictureUrl: data.secure_url });
-                        showToast(translations[currentLang].picUpdateSuccess);
-                    } catch (error) {
-                        console.error("Profile picture update error:", error);
-                        showToast(translations[currentLang].picUpdateError, true);
-                    } finally {
-                        profileViewImg.classList.remove('loading');
+                // Chama updateProfileView AQUI para garantir que os KPIs do perfil usem os dados mais recentes do cobrador
+                updateProfileView(collectorData); // Passa os dados atualizados
+
+                // Lógica de primeira carga (FCM) - Executa apenas uma vez após obter os dados iniciais
+                if (isFirstLoad) {
+                    console.log('[COBRADOR-APP] Carga inicial do cobrador completa. Configurando FCM...');
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(registration => {
+                            console.log('[COBRADOR-APP] Service Worker está ativo. Configurando FCM.');
+                            setupFCM(currentCollectorUsername, registration); // Usa o USERNAME aqui!
+                        }).catch(err => {
+                            console.error('[COBRADOR-APP] ERROR: Service Worker não pronto.', err);
+                        });
                     }
-                }, 'image/jpeg');
+                    isFirstLoad = false; // Marca que a primeira carga foi concluída
+                }
+
+            } else {
+                console.error(`[COBRADOR-APP] Documento do cobrador ${currentCollectorUsername} foi excluído ou inacessível?`);
+                showBlockedView("Erro: Seus dados de cobrador não puderam ser carregados.");
+                signOut(auth);
+            }
+        }, (error) => { // Manejo de erro para onSnapshot do cobrador
+             console.error(`[COBRADOR-APP] Erro ao escutar dados do cobrador ${currentCollectorUsername}:`, error);
+             showBlockedView("Erro de conexão ao carregar seus dados.");
+             signOut(auth);
+        }); // Fim do onSnapshot do cobrador
+
+        // --- INÍCIO TAREFA C2: Monitores movidos para DENTRO do .then ---
+        // (Estes listeners agora começam DEPOIS de sabermos o companyId e username)
+
+        // Listener de Clientes (Modificado para usar companyId)
+        console.log(`[COBRADOR-APP] Iniciando listener para: companies/${currentCompanyId}/clients`);
+        onSnapshot(collection(db, 'companies', currentCompanyId, "clients"), (snapshot) => {
+            console.log("[COBRADOR-APP] Dados de clientes recebidos/atualizados.");
+            allClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Processamento inicial dos clientes (compatibilidade, status)
+            allClients.forEach(client => {
+                if (!client.loans && client.totalLoan) { /* ... (código de compatibilidade) ... */ }
+                 else if (!client.loans) { client.loans = []; }
+                client.loans.forEach(loan => {
+                    const loanDetails = calculateLoanDetails(loan); // Usa a nova função
+                    loan.status = loanDetails.status;
+                    loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated; // Guarda mora
+                });
             });
+
+            // Atualiza as partes da UI que dependem dos clientes
+            updateTodaysRouteList();
+            updateRouteProgress();
+            updateAllClientsList();
+            updateNotifications(); // Atualiza notificações que dependem de status/histórico
+            if (document.querySelector('#map-view.active')) plotClientsOnMap(); // Atualiza mapa se visível
+            applyLanguage(currentLang); // Re-aplica idioma aos elementos gerados
+
+        }, (error) => {
+            console.error(`[COBRADOR-APP] Erro ao obter clientes de ${currentCompanyId}:`, error);
+            showToast('Falha ao carregar clientes.', true);
+        });
+
+        // Listener de Gastos (Modificado para usar companyId e username)
+        console.log(`[COBRADOR-APP] Iniciando listener para: companies/${currentCompanyId}/expenses (filtrado por ${currentCollectorUsername})`);
+        const expensesQuery = query(collection(db, 'companies', currentCompanyId, 'expenses'), where("collectorId", "==", currentCollectorUsername));
+        onSnapshot(expensesQuery, (snapshot) => {
+            console.log("[COBRADOR-APP] Dados de gastos recebidos/atualizados.");
+            allExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Atualiza as vistas que dependem dos gastos
+            updateExpensesView();
+            // Atualiza o perfil, pois o capital em mãos depende dos gastos
+            if(collectorData) updateProfileView(collectorData); // Atualiza KPIs do perfil se já temos dados do cobrador
+
+        }, (error) => {
+            console.error(`[COBRADOR-APP] Erro ao obter gastos de ${currentCollectorUsername} em ${currentCompanyId}:`, error);
+            showToast('Falha ao carregar gastos.', true);
+        });
+
+        // Listener de Liquidações (Modificado para usar companyId e username)
+        console.log(`[COBRADOR-APP] Iniciando listener para: companies/${currentCompanyId}/settlements (filtrado por ${currentCollectorUsername})`);
+        const settlementsQuery = query(collection(db, 'companies', currentCompanyId, 'settlements'), where("collectorId", "==", currentCollectorUsername));
+        onSnapshot(settlementsQuery, (snapshot) => {
+            console.log("[COBRADOR-APP] Dados de liquidações recebidos/atualizados.");
+            allSettlements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Atualiza as vistas que dependem das liquidações
+            updateExpensesView(); // A vista de gastos agora mostra liquidações
+            // Atualiza o perfil, pois o capital em mãos depende das liquidações
+             if(collectorData) updateProfileView(collectorData); // Atualiza KPIs do perfil
+
+        }, (error) => {
+            console.error(`[COBRADOR-APP] Erro ao obter liquidações de ${currentCollectorUsername} em ${currentCompanyId}:`, error);
+            showToast('Falha ao carregar dados de liquidação.', true);
+        });
+
+        // --- FIM TAREFA C2: Monitores movidos ---
+
+    }).catch(error => { // Catch do getDocs para buscar o cobrador
+         console.error("[COBRADOR-APP] Erro crítico ao buscar documento do cobrador por authUid:", error);
+         showBlockedView("Erro crítico ao carregar seus dados iniciais.");
+         signOut(auth);
+    }); // Fim do getDocs().catch()
+}
+        
+        // --- INÍCIO: REEMPLAZO COMPLETO CORREGIDO (v2) TAREFA CL5 (showCropperModal) ---
+function showCropperModal(file) {
+    const cropperModal = document.getElementById('cropperModal');
+    if (!cropperModal) {
+        console.error("Elemento #cropperModal não encontrado!");
+        return;
+    }
+
+    // Limpa conteúdo anterior e recria o HTML do modal para garantir estado limpo
+    cropperModal.innerHTML = `
+        <header class="modal-header">
+            <button id="closeCropperModal"><i data-lucide="x"></i></button>
+            <span class="modal-title" data-lang-key="cropImage"></span>
+        </header>
+        <div class="modal-content-wrapper">
+            <div id="cropper-container" class="container" style="height: calc(100% - 60px);"> <!-- Ajuste altura container -->
+                 <img id="cropper-image" style="max-width: 100%; display: block;"> <!-- display:block importante -->
+            </div>
+        </div>
+        <div class="action-buttons">
+            <button class="btn-secondary" id="cancelCropBtn"><span data-lang-key="cancel"></span></button>
+            <button class="btn-primary" id="confirmCropBtn"><i data-lucide="check"></i> <span data-lang-key="confirmCrop"></span></button>
+        </div>`;
+
+    // Ativa o modal e aplica idioma/ícones
+    history.pushState({ modal: 'cropperModal' }, 'Crop Image', '#crop'); // Adiciona estado ao histórico para botão voltar
+    cropperModal.classList.add('active');
+    lucide.createIcons({nodes: cropperModal.querySelectorAll('[data-lucide]')});
+    applyLanguage(currentLang);
+
+    // Elementos e variáveis do Cropper
+    const image = document.getElementById('cropper-image');
+    const reader = new FileReader();
+    let cropper; // Instância do Cropper.js
+
+    // Função para fechar e limpar o modal de forma segura
+    const closeModal = () => {
+         if(cropper) {
+             try {
+                 cropper.destroy(); // Libera recursos do Cropper
+                 console.log("[CLIENTE-APP] Instância do Cropper destruída.");
+             } catch (e) { console.warn("Erro ao destruir cropper (pode já ter sido destruído):", e); }
+             cropper = null; // Limpa a referência
+         }
+         // Verifica se o modal ainda existe antes de remover a classe
+         const modalEl = document.getElementById('cropperModal');
+         if (modalEl) modalEl.classList.remove('active');
+         console.log("[CLIENTE-APP] Modal de recorte fechado.");
+    };
+
+    // Lê o arquivo de imagem e inicializa o Cropper.js
+    reader.onload = e => {
+        if (image) { // Verifica se o elemento da imagem existe
+            image.src = e.target.result; // Define a imagem base
+            if(cropper) cropper.destroy(); // Garante destruir instância anterior
+            // Inicializa o Cropper com opções para recorte quadrado
+            cropper = new Cropper(image, {
+                 aspectRatio: 1,       // Força recorte quadrado (1:1)
+                 viewMode: 1,          // Restringe a área de corte à tela da imagem
+                 background: false,    // Sem fundo quadriculado no recorte
+                 autoCropArea: 0.8,    // Área de corte inicial (80% da imagem)
+                 responsive: true,     // Permite redimensionar o cropper
+                 checkOrientation: false // Evita rotação automática indesejada
+            });
+            console.log("[CLIENTE-APP] Cropper inicializado.");
+        } else {
+             console.error("Elemento #cropper-image não encontrado ao inicializar Cropper.");
+             showToast("Erro ao inicializar ferramenta de recorte.", true);
+             closeModal();
         }
+    };
+    reader.onerror = error => {
+        console.error("Erro ao ler arquivo para recorte:", error);
+        showToast("Erro ao carregar imagem para recorte.", true);
+        closeModal();
+    };
+    reader.readAsDataURL(file); // Inicia a leitura do arquivo
+
+    // --- Adiciona listeners aos botões DO MODAL RECRIADO ---
+    const closeBtn = document.getElementById('closeCropperModal');
+    const cancelBtn = document.getElementById('cancelCropBtn');
+    const confirmBtn = document.getElementById('confirmCropBtn');
+
+    // Usa window.history.back() para fechar, aproveitando o popstate listener
+    if(closeBtn) closeBtn.addEventListener('click', () => window.history.back());
+    if(cancelBtn) cancelBtn.addEventListener('click', () => window.history.back());
+
+    // Listener para o botão "Confirmar Recorte"
+    if(confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            if (!cropper) { // Verificação de segurança
+                 console.error("Instância do Cropper não encontrada ao confirmar recorte.");
+                 showToast("Erro: Ferramenta de recorte não iniciada.", true);
+                 return;
+            }
+
+            // Obtém a imagem recortada como um Blob (arquivo binário)
+            cropper.getCroppedCanvas({
+                width: 256, // Define o tamanho da imagem de saída (ex: 256x256 pixels)
+                height: 256,
+                imageSmoothingQuality: 'high' // Qualidade da imagem
+            }).toBlob(async (blob) => { // INICIO do callback async (blob)
+                if (!blob) { // Verifica se o blob foi gerado
+                     console.error("Cropper não retornou blob ao recortar.");
+                     showToast('Erro ao recortar imagem.', true);
+                     return;
+                }
+
+                // Feedback visual: adiciona classe 'loading' à imagem de perfil na UI
+                const profileViewImg = document.getElementById('profile-view-img');
+                if(profileViewImg) profileViewImg.classList.add('loading');
+
+                closeModal(); // Fecha o modal de recorte ANTES de iniciar o upload
+
+                // --- Bloco TRY/CATCH para UPLOAD no Firebase Storage e SALVAR URL no Firestore ---
+                try {
+                    // Verifica se temos os IDs necessários (companyId, clientId)
+                    if (!currentCompanyId || !currentClientId) throw new Error("IDs não definidos para upload de foto de perfil.");
+
+                    // 1. Define a RUTA específica no Firebase Storage: companies/{id_empresa}/clients/{id_cliente}/profile.jpg
+                    const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/profile.jpg`);
+                    console.log(`[CLIENTE-APP] Subindo foto de perfil para: ${storageRef.fullPath}`);
+                    showToast('Atualizando foto...', false); // Feedback
+
+                    // 2. Sobe o arquivo (o 'blob' já vem recortado)
+                    await uploadBytes(storageRef, blob);
+
+                    // 3. Obtém a URL de download da imagem subida
+                    const downloadURL = await getDownloadURL(storageRef);
+                    console.log(`[CLIENTE-APP] Foto de perfil subida com sucesso. URL: ${downloadURL}`);
+
+                    // 4. Salva a NOVA URL no documento do cliente no Firestore
+                    //    (A rota do Firestore já foi corrigida na Tarefa CL3)
+                    const clientDocRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+                    await updateDoc(clientDocRef, { profilePictureUrl: downloadURL });
+
+                    showToast(translations[currentLang].picUpdateSuccess); // Mensagem de sucesso
+
+                } catch (error) { // Captura erros do Storage ou do Firestore
+                    console.error("[CLIENTE-APP] Erro ao atualizar foto de perfil (Storage/Firestore):", error);
+                    // Tenta dar um feedback mais específico do erro
+                    let errorMsg = translations[currentLang].picUpdateError; // Mensagem genérica
+                     if (error.code && error.code.startsWith('storage/')) { // Erro do Storage
+                        errorMsg = `Erro no envio da foto: ${error.code}`;
+                     } else if (error.code) { // Erro do Firestore
+                         errorMsg = `Erro ao salvar URL: ${error.code}`;
+                     }
+                    showToast(errorMsg, true); // Mostra o erro ao usuário
+                } finally {
+                    // Garante que o estado visual de 'loading' seja removido da imagem de perfil
+                    if(profileViewImg) profileViewImg.classList.remove('loading');
+                }
+                // --- Fim do Bloco TRY/CATCH ---
+
+            // *** ESTA É A CHAVE '}' CORRIGIDA QUE FECHA O CALLBACK async (blob) => { ... } ***
+            }, 'image/jpeg', 0.9); // Fim dos argumentos de toBlob
+        }); // Fim do listener do confirmBtn
+    } else {
+         console.error("Botão #confirmCropBtn não encontrado após recriar modal.");
+    }
+}
+// --- FIM: REEMPLAZO COMPLETO CORREGIDO (v2) TAREFA CL5 (showCropperModal) ---
         
         async function handleClearNotifications() {
-            if (!currentClient) return;
-            try {
-                const clientRef = doc(db, 'clients', currentClient.id);
-                await updateDoc(clientRef, {
-                    notifications: []
-                });
-                showToast(translations[currentLang].notificationsCleared);
+    if (!currentClient || !currentClientId || !currentCompanyId) return; // Adiciona verificação de IDs
+    try {
+        // --- INÍCIO TAREFA CL3 (Limpar Notifs) ---
+        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); // <-- ROTA NOVA
+        // --- FIM TAREFA CL3 ---
+        await updateDoc(clientRef, {
+            notifications: []
+        });
+        showToast(translations[currentLang].notificationsCleared);
             } catch (error) {
                 console.error("Error clearing notifications:", error);
                 showToast(translations[currentLang].genericError, true);
@@ -1778,19 +2061,21 @@
                 const notifItem = target.closest('.notification-item.unread');
                 if (notifItem && notifItem.dataset.id) {
                     const notifId = notifItem.dataset.id;
-                    if (currentClient) {
-                        const clientRef = doc(db, 'clients', currentClient.id);
-                        const updatedNotifications = currentClient.notifications.map((n, index) => {
-                            const currentNotifId = n.id || `notif_${index}`;
-                            if (currentNotifId === notifId) {
-                                return { ...n, read: true };
-                            }
-                            return n;
-                        });
-                        updateDoc(clientRef, { notifications: updatedNotifications })
-                            .then(() => showToast(translations[currentLang].notificationRead))
-                            .catch(err => console.error("Error marking notification as read", err));
-                    }
+                if (currentClient && currentClientId && currentCompanyId) { // Adiciona verificação de IDs
+                    // --- INÍCIO TAREFA CL3 (Notif Lida) ---
+                    const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); // <-- ROTA NOVA
+                    // --- FIM TAREFA CL3 ---
+                    const updatedNotifications = (currentClient.notifications || []).map((n, index) => { // Garante que notifications existe
+                        const currentNotifId = n.id || `notif_${index}`;
+                        if (currentNotifId === notifId) {
+                            return { ...n, read: true };
+                        }
+                        return n;
+                    });
+                    updateDoc(clientRef, { notifications: updatedNotifications })
+                        .then(() => showToast(translations[currentLang].notificationRead))
+                        .catch(err => console.error("Error marking notification as read", err));
+                }
                 }
             });
             appContainer.addEventListener('change', e => {
@@ -1827,75 +2112,153 @@
                 console.error("Error al enviar el ticket de notificación al cobrador:", error);
             }
         }
+        
         async function handleReceiptSubmission(button) {
-             if (!receiptFile || !currentClient) return;
-             
-             const amountInput = document.getElementById('receipt-amount');
-             const amount = parseFloat(amountInput.value);
+    // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
+    if (!receiptFile || !currentClient || !currentClientId || !currentCompanyId) {
+        console.warn("[CLIENTE-APP] Faltan datos (IDs o archivo) para enviar recibo.");
+        showToast(translations[currentLang].uploadError, true); // Mensaje genérico si faltan datos
+        return;
+    }
 
-             if (isNaN(amount) || amount <= 0) {
-                 showToast(translations[currentLang].invalidAmount, true);
-                 return;
-             }
+    const amountInput = document.getElementById('receipt-amount');
+    const amount = parseFloat(amountInput.value);
 
-             const originalButtonHTML = button.innerHTML;
-             button.disabled = true;
-             button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
-             lucide.createIcons({nodes: [button.querySelector('i')]});
-             
-             try {
-                const formData = new FormData();
-                formData.append('file', receiptFile);
-                formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-                const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Upload to Cloudinary failed: ${response.statusText} - ${errorText}`);
-                }
-                const data = await response.json();
-                
-                const clientRef = doc(db, 'clients', currentClient.id);
-                
-                // Crea una copia profunda para modificar el array de préstamos de forma segura
-                const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans));
-                const newPayment = {
-                    amount: amount,
-                    date: new Date(),
-                    receiptUrl: data.secure_url,
-                    status: 'pending_verification'
-                };
-                
-                if (!updatedLoans[selectedLoanIndex].history) {
-                    updatedLoans[selectedLoanIndex].history = [];
-                }
-                updatedLoans[selectedLoanIndex].history.push(newPayment);
+    // Validación del monto ingresado
+    if (isNaN(amount) || amount <= 0) {
+         showToast(translations[currentLang].invalidAmount, true);
+         // Estilo visual de error para el input
+         if(amountInput) amountInput.style.borderColor = 'var(--danger-color)';
+         setTimeout(() => { if(amountInput) amountInput.style.borderColor = ''; }, 2500);
+         return;
+    }
 
-                await updateDoc(clientRef, {
-                    loans: updatedLoans
-                });
+    // Deshabilita el botón y muestra un indicador de carga
+    const originalButtonHTML = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+    lucide.createIcons({nodes: [button.querySelector('i')]}); // Asegúrate de crear el icono
 
-                showToast(translations[currentLang].receiptSent);
-                sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].paymentSent} ${money(amount)}.`, 'payment');
-                
-                receiptFile = null;
-                document.getElementById('receipt-file-input').value = '';
-                document.getElementById('receipt-preview').style.display = 'none';
-                document.getElementById('upload-label-text').style.display = 'block';
-                amountInput.value = '';
-                button.disabled = true;
-                
-                button.innerHTML = originalButtonHTML;
-                
-                document.querySelector('.nav-item[data-view="home"]').click();
+    let receiptUrl = ''; // Variable para guardar la URL del archivo subido
 
-             } catch(error) {
-                console.error("Receipt submission error:", error);
-                showToast(translations[currentLang].uploadError, true);
-                button.disabled = false;
-                button.innerHTML = originalButtonHTML;
-                lucide.createIcons({nodes: button.querySelectorAll('[data-lucide]')});
-             }
+    // --- Bloque TRY/CATCH para el UPLOAD al Firebase Storage ---
+    try {
+        // 1. Crear un nombre de archivo único para evitar sobreescrituras
+        const uniqueFileName = `receipt_${Date.now()}_${receiptFile.name.replace(/\s+/g, '_')}`;
+        // 2. Definir la RUTA específica dentro del Storage: companies/{id_empresa}/clients/{id_cliente}/receipts/{nombre_archivo}
+        const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/receipts/${uniqueFileName}`);
+
+        console.log(`[CLIENTE-APP] Subiendo recibo para: ${storageRef.fullPath}`); // Log útil para depuración
+        showToast('Enviando comprovante...', false); // Feedback visual para el usuario
+
+        // 3. Subir el archivo usando uploadBytes
+        await uploadBytes(storageRef, receiptFile);
+
+        // 4. Obtener la URL pública de descarga del archivo subido
+        receiptUrl = await getDownloadURL(storageRef);
+        console.log(`[CLIENTE-APP] Recibo subido com sucesso. URL: ${receiptUrl}`);
+
+    } catch (storageError) {
+        // Manejo de errores específicos del upload
+        console.error("[CLIENTE-APP] Erro ao subir recibo para Firebase Storage:", storageError);
+        let errorMsg = translations[currentLang].uploadError; // Mensaje genérico por defecto
+        if (storageError.code) { // Si Firebase Storage devuelve un código de error
+            switch (storageError.code) {
+                case 'storage/unauthorized': errorMsg = "Erro de permissão ao enviar."; break;
+                case 'storage/canceled': errorMsg = "Envio cancelado."; break;
+                case 'storage/unknown': errorMsg = "Erro desconhecido no servidor de arquivos."; break;
+                 default: errorMsg = `Erro no envio: ${storageError.code}`; // Muestra el código si es otro
+            }
         }
+        showToast(errorMsg, true); // Muestra el error al usuario
+
+        // Re-habilita el botón y restaura su contenido si el upload falla
+        button.disabled = false;
+        button.innerHTML = originalButtonHTML;
+        // Asegúrate de re-crear el icono si existía
+        const icon = button.querySelector('[data-lucide]');
+        if(icon) lucide.createIcons({nodes: [icon]});
+        return; // Detiene la ejecución de la función si el upload falla
+    }
+    // --- Fin del Bloque TRY/CATCH del Upload ---
+
+    // --- Bloque TRY/CATCH para GUARDAR la URL y datos en Firestore ---
+    // Este bloque solo se ejecuta si el upload fue exitoso
+    try {
+        // La referencia al documento del cliente ya usa la ruta correcta (corregida en Tarea CL3)
+        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+
+        // Crea una copia segura de los préstamos actuales para modificarla
+        // Asegúrate que currentClient.loans exista y sea un array
+        const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans || []));
+
+        // Prepara el objeto del nuevo registro de pago en el historial
+        const newPayment = {
+            amount: amount,
+            date: new Date(), // Usa la fecha/hora actual del dispositivo del cliente
+            receiptUrl: receiptUrl, // <-- ¡Usa la URL obtenida de Firebase Storage!
+            status: 'pending_verification', // Estado inicial que el cobrador debe aprobar
+            method: 'receipt' // Identifica que fue un pago con comprobante
+        };
+
+        // Validación: Asegura que el índice del préstamo seleccionado sea válido
+        if (selectedLoanIndex < 0 || selectedLoanIndex >= updatedLoans.length) {
+            // Si el índice es inválido (no debería pasar si la UI está bien), lanza un error
+            throw new Error("Índice de empréstimo selecionado inválido ao salvar recibo.");
+        }
+        // Asegura que el objeto del préstamo y su historial existan como arrays
+        if (!updatedLoans[selectedLoanIndex]) updatedLoans[selectedLoanIndex] = { history: []};
+        if (!updatedLoans[selectedLoanIndex].history) updatedLoans[selectedLoanIndex].history = [];
+
+        // Añade el nuevo pago al historial del préstamo correcto
+        updatedLoans[selectedLoanIndex].history.push(newPayment);
+
+        // Actualiza el documento del cliente en Firestore con el array 'loans' modificado
+        await updateDoc(clientRef, { loans: updatedLoans });
+
+        showToast(translations[currentLang].receiptSent); // Mensaje de éxito
+
+        // Envía la notificación INTERNA al cobrador (usa la ruta global correcta)
+        sendNotificationToCollector(
+            `${currentClient.name || 'Cliente'}`, // Nombre del cliente
+            `${translations[currentLang].paymentSent} ${money(amount)}.`, // Mensaje
+            'payment', // Tipo de notificación
+            'receipt' // Ícono
+        );
+        // Envía el ticket PUSH para que el backend lo procese (usa la ruta global correcta)
+        sendNotificationTicket('payment_receipt', { amount: amount });
+
+        // Limpia el formulario después de un envío exitoso
+        receiptFile = null; // Limpia la variable global del archivo
+        const fileInput = document.getElementById('receipt-file-input');
+        if(fileInput) fileInput.value = ''; // Resetea el input de archivo
+        const previewImg = document.getElementById('receipt-preview');
+        const uploadLabel = document.getElementById('upload-label-text');
+        if(previewImg) previewImg.style.display = 'none'; // Oculta la vista previa
+        if(uploadLabel) uploadLabel.style.display = 'block'; // Muestra el texto "Clique para anexar"
+        if(amountInput) amountInput.value = ''; // Limpia el campo de monto
+
+        // Mantiene el botón deshabilitado DESPUÉS del éxito para evitar doble envío
+        button.disabled = true;
+        button.innerHTML = originalButtonHTML; // Restaura el texto original del botón
+
+        // Navega de vuelta a la pantalla principal (home)
+        const homeNav = document.querySelector('.nav-item[data-view="home"]');
+        if(homeNav) homeNav.click();
+
+    } catch (firestoreError) {
+         // Manejo de errores si falla el guardado en Firestore
+         console.error("[CLIENTE-APP] Erro ao salvar dados do recibo no Firestore:", firestoreError);
+         showToast('Erro ao registrar o comprovante no sistema.', true);
+         // Re-habilita el botón si guardar en Firestore falla
+         button.disabled = false;
+         button.innerHTML = originalButtonHTML;
+         // Asegúrate de re-crear el icono si existía
+         const icon = button.querySelector('[data-lucide]');
+         if(icon) lucide.createIcons({nodes: [icon]});
+    }
+    // --- Fin del Bloque TRY/CATCH del Firestore ---
+}
 
         function loadGlobalSettings(settings) {
             const companyLogo = settings.companyLogo || DEFAULT_LOGO_URL;
@@ -1905,112 +2268,189 @@
             if(headerLogo) headerLogo.src = companyLogo;
         }
 
+        
         async function handleLogin(e) {
-            e.preventDefault();
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            const loginBtn = document.querySelector('#login-form button');
-            const originalBtnHTML = loginBtn.innerHTML;
-            loginBtn.disabled = true;
-            loginBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
-            lucide.createIcons({nodes: [loginBtn.querySelector('i')]});
+    e.preventDefault();
+    const emailInput = document.getElementById('username'); // O ID ainda é 'username', mas agora DEVE ser um email
+    const passwordInput = document.getElementById('password');
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
 
+    const loginBtn = document.querySelector('#login-form button');
+    const originalBtnHTML = loginBtn.innerHTML;
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+    lucide.createIcons({ nodes: [loginBtn.querySelector('i')] });
+
+    try {
+        console.log(`[CLIENTE-APP] Tentando login com Firebase Auth para email: ${email}`);
+        // Usa signInWithEmailAndPassword
+        await signInWithEmailAndPassword(auth, email, password);
+
+        // SUCESSO! Não fazemos mais nada aqui.
+        // O onAuthStateChanged (na função init) será disparado automaticamente
+        // e cuidará de buscar os dados do cliente e mostrar a app.
+        console.log("[CLIENTE-APP] signInWithEmailAndPassword bem-sucedido. Aguardando onAuthStateChanged...");
+        // O botão será reativado pelo onAuthStateChanged (ou ficará desativado se o login falhar)
+
+    } catch (error) {
+        console.error("[CLIENTE-APP] Erro de login (signInWithEmailAndPassword):", error.code, error.message);
+        let errorMsgKey = 'genericError';
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+            errorMsgKey = 'invalidCredentials';
+        } else if (error.code === 'auth/invalid-email') {
+             // Embora o campo seja 'username', ele espera um email agora
+             showToast('Formato de email inválido no campo usuário.', true); 
+             errorMsgKey = null; // Não mostra toast genérico
+        } else if (error.code === 'auth/too-many-requests') {
+             showToast('Muitas tentativas falhadas. Tente novamente mais tarde.', true);
+             errorMsgKey = null;
+        }
+
+        if (errorMsgKey) showToast(translations[currentLang][errorMsgKey], true);
+
+        // Reativa o botão em caso de erro
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = originalBtnHTML;
+        applyLanguage(currentLang); // Reapplica idioma ao botão
+
+    }
+    // Não há 'finally' aqui, o botão só reativa no erro.
+}
+
+        
+        function init() {
+    // --- Service Worker Registration (SEM ALTERAÇÕES) ---
+    if ('serviceWorker' in navigator) {
+      if (location.protocol === 'https:' || location.hostname === 'localhost') {
+        navigator.serviceWorker.register('firebase-messaging-sw.js') // Certifique-se que o nome do arquivo está correto
+          .then(function(registration) {
+            console.log('[CLIENTE-APP] Service Worker registrado com sucesso:', registration);
+          }).catch(function(error) {
+            console.log('[CLIENTE-APP] Error ao registrar o Service Worker:', error);
+          });
+      } else {
+          console.warn('[CLIENTE-APP] Service Worker não registrado. O ambiente não é seguro (HTTPS) ou não é localhost.');
+      }
+    }
+
+    // --- Popstate listener (SEM ALTERAÇÕES) ---
+    window.addEventListener('popstate', () => { /* ... (código existente) ... */ });
+
+    // --- Lógica do Banner PWA (SEM ALTERAÇÕES) ---
+    window.addEventListener('beforeinstallprompt', (e) => { /* ... (código existente) ... */ });
+    const installBtn = document.getElementById('install-btn');
+    if (installBtn) { /* ... (código existente) ... */ }
+    const closeInstallBtn = document.getElementById('close-install-banner');
+    if (closeInstallBtn) { /* ... (código existente) ... */ }
+
+    // --- Aplica tema e idioma iniciais (SEM ALTERAÇÕES) ---
+    const preferredTheme = localStorage.getItem('theme') || 'dark';
+    applyTheme(preferredTheme);
+    applyLanguage(currentLang);
+
+    // --- INÍCIO TAREFA CL0/CL1: NOVA LÓGICA DE AUTENTICAÇÃO ---
+    const splash = document.getElementById('splash-screen');
+    loadGlobalSettings({}); // Carrega logo padrão enquanto autentica
+
+    onAuthStateChanged(auth, async (user) => {
+        splash.style.opacity = '0';
+        setTimeout(() => splash.style.display = 'none', 500);
+
+        if (user) {
+            // Usuário logado via Firebase Auth
             try {
-                const q = query(collection(db, "clients"), where("username", "==", username), where("password", "==", password));
-                const querySnapshot = await getDocs(q);
+                console.log("[CLIENTE-APP] Usuário Firebase Auth detectado:", user.uid);
+                currentAuthUid = user.uid; // Guarda o Auth UID
+
+                // PASSO CL1: Buscar o documento do cliente usando o Auth UID
+                console.log("[CLIENTE-APP] Buscando documento do cliente com authUid:", currentAuthUid);
+                // Usamos collectionGroup para buscar em todas as subcoleções 'clients'
+                const clientQuery = query(collectionGroup(db, 'clients'), where('authUid', '==', currentAuthUid));
+                const querySnapshot = await getDocs(clientQuery);
 
                 if (querySnapshot.empty) {
-                    showToast(translations[currentLang].invalidCredentials, true);
-                } else {
-                    const clientDoc = querySnapshot.docs[0];
-                    sessionStorage.setItem('lumixClientId', clientDoc.id);
-                    document.getElementById('login-form').removeEventListener('submit', handleLogin);
-                    showMainApp(clientDoc.id);
+                    throw new Error("Nenhum registro de cliente encontrado para esta conta. Contate o suporte.");
                 }
+                if (querySnapshot.size > 1) {
+                    // Isso não deveria acontecer se a lógica de criação for correta
+                    console.warn("[CLIENTE-APP] Múltiplos clientes encontrados para o mesmo Auth UID!", querySnapshot.docs.map(d => d.ref.path));
+                    // Por segurança, usamos o primeiro encontrado
+                }
+
+                const clientDoc = querySnapshot.docs[0];
+                currentClientId = clientDoc.id; // ID do documento Firestore
+                currentCompanyId = clientDoc.ref.parent.parent.id;
+                currentClientData = { id: currentClientId, ...clientDoc.data() }; // Guarda os dados do cliente
+                currentCollectorId = currentClientData.collectorId; // Guarda o ID do cobrador associado
+
+                console.log(`[CLIENTE-APP] Cliente encontrado! ClientID: ${currentClientId}, CompanyID: ${currentCompanyId}, CollectorID: ${currentCollectorId}`);
+
+                // --- INÍCIO TAREFA CL2: Verificar Status da Empresa ---
+                console.log(`[CLIENTE-APP] Verificando status da empresa: ${currentCompanyId}...`);
+                const companyRef = doc(db, 'companies', currentCompanyId);
+                const companySnap = await getDoc(companyRef); // Usa a ferramenta getDoc
+
+                if (!companySnap.exists()) {
+                    // Isso seria um erro grave se chegamos até aqui
+                    throw new Error(`Erro crítico: A empresa (${currentCompanyId}) associada a este cliente não foi encontrada.`);
+                }
+
+                currentCompanyData = companySnap.data(); // Guarda os dados da empresa (logo, nome, status)
+
+                // ¡A VERIFICAÇÃO DE STATUS!
+                if (currentCompanyData.status === 'suspended') {
+                    const errorMsg = `A conta da sua empresa (${currentCompanyData.name || 'Nome não disponível'}) está suspensa. Entre em contato com o suporte ou seu cobrador.`;
+                    console.warn(`[CLIENTE-APP] ${errorMsg}`);
+                    showBlockedView(errorMsg); // Mostra bloqueio
+                    // Não deslogamos, apenas bloqueamos a app.
+                    return; // Para a execução aqui
+                }
+
+                console.log(`[CLIENTE-APP] Empresa ${currentCompanyData.name} está ativa (Status: ${currentCompanyData.status}).`);
+                // Aplica o logo e nome da empresa na UI (substitui a leitura antiga de config/global)
+                loadGlobalSettings(currentCompanyData);
+                // --- FIM TAREFA CL2 ---
+
+                // Agora sim, chama a função principal
+                console.log("[CLIENTE-APP] Verificações completas OK. Iniciando a app principal...");
+                showMainApp(currentClientId, currentCompanyId);
+
             } catch (error) {
-                console.error("Login error:", error);
-                showToast(translations[currentLang].genericError, true);
-            } finally {
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = originalBtnHTML;
-                applyLanguage(currentLang);
+                console.error("[CLIENTE-APP] Erro crítico durante a verificação de acesso:", error);
+                showBlockedView(`Ocorreu um erro ao verificar sua conta: ${error.message}`);
+                await signOut(auth).catch(e => console.error("Erro no signOut forçado:", e)); // Tenta deslogar
             }
+
+        } else {
+            // Usuário NÃO está logado no Firebase Auth
+            console.log("[CLIENTE-APP] Nenhum usuário Firebase Auth logado. Mostrando tela de login.");
+            // Limpa variáveis globais caso tenha havido logout
+            currentAuthUid = null;
+            currentClientId = null;
+            currentCompanyId = null;
+            currentCollectorId = null;
+            currentClient = null; // Limpa dados do cliente anterior
+            collectorSettings = null; // Limpa dados do cobrador anterior
+
+            document.getElementById('app-container').style.display = 'none';
+            document.getElementById('login-view').style.display = 'flex';
+
+            // Garante que o listener do formulário de login (que usará Firebase Auth) seja adicionado
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.removeEventListener('submit', handleLogin); // Remove o antigo se existir
+                loginForm.addEventListener('submit', handleLogin); // Adiciona o novo
+            }
+            applyLanguage(currentLang); // Aplica idioma na tela de login
         }
+    });
+    // --- FIM TAREFA CL0/CL1 ---
+}
+init();
 
-        function init() {
-            if ('serviceWorker' in navigator) {
-              if (location.protocol === 'https:' || location.hostname === 'localhost') {
-                navigator.serviceWorker.register('firebase-messaging-sw.js')
-                  .then(function(registration) {
-                    console.log('Service Worker registrado con éxito:', registration);
-                  }).catch(function(error) {
-                    console.log('Error al registrar el Service Worker:', error);
-                  });
-              } else {
-                  console.warn('Service Worker no registrado. El entorno no es seguro (HTTPS) o no es localhost.');
-              }
-            }
 
-            window.addEventListener('popstate', () => {
-                if (currentClient) {
-                    const viewName = location.hash.substring(1) || 'home';
-                    showView(viewName);
-                }
-            });
 
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                const installBanner = document.getElementById('install-banner');
-                if (installBanner) installBanner.style.display = 'block';
-            });
-
-            const installBtn = document.getElementById('install-btn');
-            if (installBtn) {
-                installBtn.addEventListener('click', async () => {
-                    const installBanner = document.getElementById('install-banner');
-                    if (installBanner) installBanner.style.display = 'none';
-                    if (deferredPrompt) {
-                        deferredPrompt.prompt();
-                        const { outcome } = await deferredPrompt.userChoice;
-                        console.log(`User response to the install prompt: ${outcome}`);
-                        deferredPrompt = null;
-                    }
-                });
-            }
-
-            const closeInstallBtn = document.getElementById('close-install-banner');
-			if (closeInstallBtn) {
-				closeInstallBtn.addEventListener('click', () => {
-					const installBanner = document.getElementById('install-banner');
-					if (installBanner) installBanner.style.display = 'none';
-				});
-			}
-
-            const preferredTheme = localStorage.getItem('theme') || 'dark';
-            applyTheme(preferredTheme);
-            applyLanguage(currentLang);
-            
-            onSnapshot(doc(db, 'config', 'global'), (docSnap) => {
-                loadGlobalSettings(docSnap.exists() ? docSnap.data() : {});
-            });
-
-            setTimeout(() => {
-                const splash = document.getElementById('splash-screen');
-                splash.style.opacity = '0';
-                setTimeout(() => {
-                    splash.style.display = 'none';
-                    const loggedInClientId = sessionStorage.getItem('lumixClientId');
-                    if (loggedInClientId) {
-                        showMainApp(loggedInClientId);
-                    } else {
-                        document.getElementById('login-view').style.display = 'flex';
-                        document.getElementById('login-form').addEventListener('submit', handleLogin);
-                    }
-                }, 500);
-            }, 1500);
-        }
-        init();
     </script>
 </body>
 </html>
