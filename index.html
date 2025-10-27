@@ -1677,6 +1677,9 @@ try {
 
     console.log(`[CLIENTE-APP] Buscando dados do cobrador com ID (username): ${currentCollectorId}...`);
 
+    let unsubscribeCollector = null;
+
+
     // Usamos onSnapshot directamente con el ID del cobrador para escuchar cambios
     unsubscribeCollector = onSnapshot(doc(db, 'collectors', currentCollectorId), (docSnap) => {
         if (docSnap.exists()) {
@@ -1711,30 +1714,35 @@ try {
             if (unsubscribeClient) unsubscribeClient();
             console.log(`[CLIENTE-APP] Iniciando listener para cliente: companies/${currentCompanyId}/clients/${currentClientId}`);
             unsubscribeClient = onSnapshot(doc(db, 'companies', currentCompanyId, "clients", currentClientId), (clientSnapshot) => {
-                if (clientSnapshot.exists()) {
-                    console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
-                    currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() }; // Actualiza datos globales del cliente
+                
+                if (!clientSnapshot.exists() || !clientSnapshot.data()) {
+                console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído, inacessível ou está vazio?`);
+                showBlockedView("Erro: Seus dados de cliente não puderam ser carregados ou estão corrompidos.");
+                signOut(auth);
+                return; // Detiene la ejecución si no hay datos válidos
+            }
+            console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
+            currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() }; // Actualiza datos globales del cliente
 
-                    // Recalcula el estado de los préstamos cada vez que cambian los datos
-                    if (currentClient.loans) {
-                        currentClient.loans.forEach(loan => {
-                            const loanDetails = calculateLoanDetails(loan); // Usa la nueva función
-                            loan.status = loanDetails.status;
-                            loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
-                            // Puedes añadir más detalles si es necesario
-                            // loan.lateDays = loanDetails.lateDays;
-                            // loan.nextDueDate = loanDetails.nextDueDate;
-                            // loan.amountDueToday = loanDetails.amountDueToday;
-                        });
-                    }
+            // Recalcula el estado de los préstamos solo si existen
+            // [CORRECCIÓN] Añadida verificación extra por si 'loans' no es un array
+            if (currentClient && Array.isArray(currentClient.loans)) {
+                currentClient.loans.forEach(loan => {
+                     if (!loan) return; // Salta si un elemento del array es nulo/inválido
+                    const loanDetails = calculateLoanDetails(loan); // Usa la nueva función
+                    loan.status = loanDetails.status;
+                    loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
+                    // ... (resto del cálculo)
+                });
+                updateAllViews(); // Refresca UI solo si hay préstamos válidos
+                checkAndSendLatePaymentNotifications(); // Verifica notificaciones
+            } else {
+                 console.warn("[CLIENTE-APP] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo.");
+                 // Puedes decidir refrescar partes de la UI que no dependan de 'loans' si es necesario
+                 // updateSomeViews();
+            }
 
-                    updateAllViews(); // Refresca toda la UI con los datos más recientes
-                    checkAndSendLatePaymentNotifications(); // Verifica si hay que enviar notificación de atraso
-                } else {
-                     console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído ou inacessível?`);
-                     showBlockedView("Erro: Seus dados de cliente não puderam ser carregados.");
-                     signOut(auth);
-                }
+
             }, (error) => {
                  console.error(`[CLIENTE-APP] Erro ao escutar dados do cliente ${currentClientId}:`, error);
                  showBlockedView("Erro de conexão ao carregar seus dados.");
@@ -2464,3 +2472,4 @@ init();
     </script>
 </body>
 </html>
+
