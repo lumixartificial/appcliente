@@ -1278,20 +1278,59 @@
         }
 
         function showView(viewName) {
-            const views = document.querySelectorAll('.view');
-            views.forEach(view => view.classList.remove('active'));
-            const activeView = document.getElementById(`${viewName}-view`);
-            if (activeView) activeView.classList.add('active');
+    // Oculta todas las vistas y desactiva ítems de navegación (sin cambios)
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
 
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => item.classList.remove('active'));
-            const activeNavItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
-            if (activeNavItem) activeNavItem.classList.add('active');
+    // Muestra la vista solicitada (sin cambios)
+    const activeView = document.getElementById(`${viewName}-view`);
+    if (activeView) {
+        activeView.classList.add('active');
+    } else {
+         // Fallback si la vista no existe, vuelve a home
+         console.warn(`Vista "${viewName}" no encontrada, volviendo a home.`);
+         viewName = 'home'; // Actualiza viewName para lógica posterior
+         document.getElementById('home-view')?.classList.add('active');
+    }
 
-            // Carga datos específicos de la vista si es necesario
-            if (viewName === 'refinance' && currentClient) {
-                updateRefinanceView();
-            }
+    // Activa el ítem de navegación correspondiente (sin cambios)
+    const activeNavItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
+    if (activeNavItem) {
+        activeNavItem.classList.add('active');
+    }
+
+    // --- [INICIO CÓDIGO AÑADIDO/MODIFICADO] ---
+    // Llama a la función de actualización específica para la vista que se está mostrando AHORA.
+    // Es crucial hacerlo DESPUÉS de añadir la clase 'active' a la vista.
+    console.log(`[CLIENTE-APP][DIAG-UI] Mostrando vista: ${viewName}. Llamando a función de actualización...`);
+    try {
+        switch (viewName) {
+            case 'home':
+                if (currentClient) updateDashboardView(); // Actualiza el dashboard
+                break;
+            case 'pay':
+                if (currentClient && collectorSettings) updatePayView(); // Actualiza la vista de pago
+                break;
+            case 'refinance':
+                if (currentClient) updateRefinanceView(); // Actualiza la vista de refinanciamiento
+                break;
+            case 'notifications':
+                if (currentClient) updateNotificationsView(); // Actualiza la lista de notificaciones
+                break;
+            case 'profile':
+                if (currentClient) updateProfileView(); // Actualiza la vista de perfil
+                break;
+            // Añade casos para otras vistas si existen
+            default:
+                 console.warn(`[CLIENTE-APP][DIAG-UI] No hay función de actualización específica para la vista: ${viewName}`);
+        }
+         console.log(`[CLIENTE-APP][DIAG-UI] Función de actualización para ${viewName} completada.`);
+    } catch (updateError) {
+         // Captura errores que puedan ocurrir DENTRO de las funciones update...View()
+         console.error(`[CLIENTE-APP][DIAG-UI] !!! ERROR al actualizar la vista ${viewName}:`, updateError);
+         showToast(`Erro ao carregar conteúdo da aba ${viewName}.`, true);
+    }
+
         }
 
         function updateDashboardView() {
