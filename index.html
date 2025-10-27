@@ -1646,6 +1646,14 @@
         console.log(`${LOG_PREFIX} ¡Service Worker listo y activo!`, registration);
 
 
+        if (!navigator.serviceWorker.controller) {
+            console.warn(`${LOG_PREFIX} Service Worker listo, pero aún no controla la página. Esperando activación...`);
+            // Espera un evento que indique que el controlador ha cambiado
+            await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+            console.log(`${LOG_PREFIX} ¡Service Worker ahora controla la página!`);
+        } else {
+             console.log(`${LOG_PREFIX} Service Worker ya controla la página.`);
+        }
 
 
                 const messaging = getMessaging(app);
@@ -1863,21 +1871,38 @@ try {
 
             // Recalcula el estado de los préstamos solo si existen
             // [CORRECCIÓN] Añadida verificación extra por si 'loans' no es un array
+            
+
             if (currentClient && Array.isArray(currentClient.loans)) {
-                currentClient.loans.forEach(loan => {
-                     if (!loan) return; // Salta si un elemento del array es nulo/inválido
-                    const loanDetails = calculateLoanDetails(loan); // Usa la nueva función
-                    loan.status = loanDetails.status;
-                    loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
-                    // ... (resto del cálculo)
-                });
-                updateAllViews(); // Refresca UI solo si hay préstamos válidos
-                checkAndSendLatePaymentNotifications(); // Verifica notificaciones
-            } else {
-                 console.warn("[CLIENTE-APP] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo.");
-                 // Puedes decidir refrescar partes de la UI que no dependan de 'loans' si es necesario
-                 // updateSomeViews();
+            console.log("[CLIENTE-APP][DIAG-UI] Procesando préstamos..."); // <-- Log añadido
+            currentClient.loans.forEach(loan => {
+                 if (!loan) return;
+                try { // <-- Añadir try/catch alrededor del cálculo
+                     const loanDetails = calculateLoanDetails(loan);
+                     loan.status = loanDetails.status;
+                     loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
+                } catch (calcError) {
+                     console.error(`[CLIENTE-APP][DIAG-UI] ERROR en calculateLoanDetails para un préstamo:`, calcError, loan); // <-- Log de error específico
+                }
+            });
+            console.log("[CLIENTE-APP][DIAG-UI] Préstamos procesados. Llamando a updateAllViews()..."); // <-- Log añadido
+            try {
+                updateAllViews(); // <-- Llamada actual envuelta en try/catch
+                console.log("[CLIENTE-APP][DIAG-UI] ¡updateAllViews() completada con éxito!"); // <-- Log añadido
+                checkAndSendLatePaymentNotifications();
+            } catch (updateError) {
+                 console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateAllViews():", updateError); // <-- Log de error específico
             }
+        } else {
+             console.warn("[CLIENTE-APP][DIAG-UI] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo y updateAllViews()."); // <-- Log modificado
+             // Si no hay préstamos, ¿deberíamos actualizar algo? Quizás el perfil.
+             try {
+                 updateProfileView(); // Intentamos actualizar solo el perfil
+                 console.log("[CLIENTE-APP][DIAG-UI] updateProfileView() llamada (sin préstamos).");
+             } catch (profileError) {
+                  console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateProfileView() (sin préstamos):", profileError);
+             }
+        }
 
 
             }, (error) => {
@@ -2609,4 +2634,3 @@ init();
     </script>
 </body>
 </html>
-
