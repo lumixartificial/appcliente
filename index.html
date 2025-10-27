@@ -955,28 +955,33 @@
 
         async function sendNotificationTicket(title, body, type, icon) {
             const LOG_PREFIX = `[CLIENTE-APP]`;
-            if (!currentClient) return;
-            console.log(`${LOG_PREFIX} -> sendNotificationTicket: Iniciando creación de notificación y ticket PUSH.`);
             try {
-                const clientRef = doc(db, 'clients', currentClient.id);
-                // 1. Añade a la lista interna de notificaciones de la app
-                const internalNotif = {
-                    title: title, body: body, icon: icon, read: false, timestamp: new Date(), id: `${type}_${Date.now()}`
-                };
-                await updateDoc(clientRef, {
-                    notifications: arrayUnion(internalNotif),
-                    lastLateNotificationTimestamp: serverTimestamp() // Reutilizamos este campo para evitar spam
-                });
-                console.log(`${LOG_PREFIX} -> sendNotificationTicket: Notificación INTERNA guardada en el historial del cliente.`);
+            // [INICIO CORRECCIÓN DE RUTA]
+            // Usa la ruta multi-tenant correcta
+            const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); 
+            // [FIN CORRECCIÓN DE RUTA]
 
-                // 2. Crea el ticket para la notificación PUSH
-                const ticketsCollectionRef = collection(db, 'clients', currentClient.id, 'pushNotificationTickets');
-                await addDoc(ticketsCollectionRef, {
-                    title: title, body: body, type: type
-                });
+            // 1. Añade a la lista interna de notificaciones de la app
+            const internalNotif = {
+                title: title, body: body, icon: icon, read: false, timestamp: new Date(), id: `${type}_${Date.now()}`
+            };
+            await updateDoc(clientRef, { // <-- Ahora usa la referencia correcta
+                notifications: arrayUnion(internalNotif),
+                lastLateNotificationTimestamp: serverTimestamp() 
+            });
+            console.log(`${LOG_PREFIX} -> sendNotificationTicket: Notificación INTERNA guardada en el historial del cliente.`);
 
-                console.log(`${LOG_PREFIX} -> sendNotificationTicket: ¡ÉXITO! Ticket PUSH creado en Firestore.`);
-            } catch (error) {
+            // 2. Crea el ticket para la notificación PUSH
+            // [INICIO CORRECCIÓN DE RUTA]
+            // Usa la ruta multi-tenant correcta para la subcolección
+            const ticketsCollectionRef = collection(db, 'companies', currentCompanyId, 'clients', currentClientId, 'pushNotificationTickets'); 
+            // [FIN CORRECCIÓN DE RUTA]
+            await addDoc(ticketsCollectionRef, { // <-- Ahora usa la referencia correcta
+                title: title, body: body, type: type
+            });
+
+            console.log(`${LOG_PREFIX} -> sendNotificationTicket: ¡ÉXITO! Ticket PUSH creado en Firestore.`);
+        } catch (error) {
                 console.error(`${LOG_PREFIX} -> sendNotificationTicket: ERROR FATAL al crear notificación/ticket.`, error);
             }
         }
@@ -2279,25 +2284,52 @@ function showCropperModal(file) {
                 }
             });
         }
-        async function sendNotificationToCollector(title, body, type = 'payment') {
-            if (!currentClient || !currentClient.collectorId) return;
-            try {
-                const notificationsCollectionRef = collection(db, 'collectors', currentClient.collectorId, 'notifications');
-                await addDoc(notificationsCollectionRef, {
-                    title: title,
-                    body: body,
-                    from: currentClient.name,
-                    clientId: currentClient.id,
-                    timestamp: serverTimestamp(),
-                    read: false,
-                    type: type,
-                    profilePictureUrl: currentClient.profilePictureUrl || ''
-                });
-                console.log("Ticket de notificação push enviado ao servidor para o cobrador.");
-            } catch (error) {
-                console.error("Error al enviar el ticket de notificación al cobrador:", error);
-            }
+        async function sendNotificationToCollector(title, body, type = 'payment', icon = 'info') { // Añadido 'icon' por consistencia
+        // Verifica que tengamos el ID (username) del cobrador
+        if (!currentCollectorId) { // <-- Usa la variable global 'currentCollectorId'
+             console.warn("[CLIENTE-APP] No se puede enviar notificación al cobrador: ID del cobrador no disponible.");
+             return;
         }
+        // Verifica que tengamos el ID del cliente
+         if (!currentClientId) {
+             console.warn("[CLIENTE-APP] No se puede enviar notificación al cobrador: ID del cliente no disponible.");
+             return;
+         }
+
+        try {
+            // [CORRECCIÓN RUTA] Usa la variable global 'currentCollectorId' que contiene el username
+            const notificationsCollectionRef = collection(db, 'collectors', currentCollectorId, 'notifications');
+
+            // Prepara los datos a guardar
+            const notificationData = {
+                title: title,
+                body: body,
+                from: currentClient?.name || 'Cliente Desconhecido', // Usa ?. por seguridad
+                clientId: currentClientId, // <-- [CORRECCIÓN] Usa la variable global
+                timestamp: serverTimestamp(),
+                read: false,
+                type: type, // 'payment' o 'refinance'
+                icon: icon, // Añadido para consistencia con notificaciones internas
+                // Asegúrate que currentClient exista antes de acceder a profilePictureUrl
+                profilePictureUrl: currentClient?.profilePictureUrl || ''
+            };
+
+            // Añade logs específicos ANTES y DESPUÉS de escribir
+            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: Intentando escribir notificación en Firestore en ruta: collectors/${currentCollectorId}/notifications`);
+            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: Datos a escribir:`, notificationData);
+
+            await addDoc(notificationsCollectionRef, notificationData);
+
+            // [CORRECCIÓN LOG] Mensaje de log corregido
+            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: ¡ÉXITO! Notificación para el cobrador escrita en Firestore.`);
+
+        } catch (error) {
+            // Log de error más detallado
+            console.error(`[CLIENTE-APP] -> sendNotificationToCollector: ERROR al escribir notificación para el cobrador en Firestore (ruta: collectors/${currentCollectorId}/notifications):`, error);
+            // Considera mostrar un toast si este error es crítico
+            // showToast('Falha ao notificar o cobrador.', true);
+        }
+    }
         
         async function handleReceiptSubmission(button) {
     // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
@@ -2684,3 +2716,4 @@ init();
     </script>
 </body>
 </html>
+
