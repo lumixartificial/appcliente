@@ -2406,13 +2406,19 @@ function showCropperModal(file) {
 
         // Envía la notificación INTERNA al cobrador (usa la ruta global correcta)
         sendNotificationToCollector(
-            `${currentClient.name || 'Cliente'}`, // Nombre del cliente
-            `${translations[currentLang].paymentSent} ${money(amount)}.`, // Mensaje
-            'payment', // Tipo de notificación
-            'receipt' // Ícono
-        );
-        // Envía el ticket PUSH para que el backend lo procese (usa la ruta global correcta)
-        sendNotificationTicket('payment_receipt', { amount: amount });
+        `${currentClient.name || 'Cliente'}`,
+        `${translations[currentLang].paymentSent} ${money(amount)}.`,
+        'payment',
+        'receipt'
+    );
+
+    // [INICIO CÓDIGO CORREGIDO PARA sendNotificationTicket]
+    // Define title y body basados en la lógica existente
+    const notifTitle = `${currentClient.name || 'Cliente'} enviou comprovante`;
+    const notifBody = `${translations[currentLang].paymentSent} ${money(amount)}.`;
+    // Llama a sendNotificationTicket con los 4 argumentos correctos
+    sendNotificationTicket(notifTitle, notifBody, 'payment_receipt', 'receipt');
+    // [FIN CÓDIGO CORREGIDO]
 
         // Limpia el formulario después de un envío exitoso
         receiptFile = null; // Limpia la variable global del archivo
