@@ -2180,8 +2180,9 @@ function showCropperModal(file) {
                     applyTheme(newTheme);
                 }
                 if (target.closest('#header-profile-link')) {
-                    location.hash = 'profile';
-                }
+            location.hash = 'profile'; // Cambia el hash
+            showView('profile'); // <-- [NUEVA LÍNEA] Llama explícitamente a showView
+        }
                 const langToggle = document.getElementById('lang-toggle');
                 const langDropdown = document.getElementById('lang-dropdown');
                 if (langToggle && target.closest('#lang-toggle')) {
@@ -2210,14 +2211,18 @@ function showCropperModal(file) {
                 }
 
                 const navItem = target.closest('.nav-item');
-                if (navItem) {
-                    if (navItem.classList.contains('disabled')) {
-                        showToast(translations[currentLang].loanFinished);
-                        return;
-                    }
-                    const targetView = navItem.dataset.view;
-                    location.hash = targetView;
-                }
+        if (navItem) {
+            if (navItem.classList.contains('disabled')) {
+                showToast(translations[currentLang].loanFinished);
+                return;
+            }
+            const targetView = navItem.dataset.view;
+            location.hash = targetView; // Cambia el hash
+            showView(targetView); // <-- [NUEVA LÍNEA] Llama explícitamente a showView
+        }
+                
+
+
                 if(target.closest('#logout-btn')) handleLogout();
                 
                 if(target.closest('#test-push-btn')) {
