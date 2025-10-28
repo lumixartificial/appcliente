@@ -1384,73 +1384,104 @@
 
             let historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
             if (currentLoan.history && currentLoan.history.length > 0) {
-                let cumulativePaid = 0;
-
-                const paymentDetails = [...currentLoan.history]
-                    .filter(p => p.date && p.date.seconds) 
-                    .sort((a, b) => a.date.seconds - b.date.seconds) 
-                    .map(p => {
-                        const installmentNumberStart = Math.floor(cumulativePaid / originalInstallment) + 1;
-                        
-                        const numInstallmentsCovered = p.amount / originalInstallment;
-                        const fullInstallments = Math.floor(numInstallmentsCovered);
-                        const partialPercent = Math.round((numInstallmentsCovered - fullInstallments) * 100);
-
-                        let title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
-                        let description = '';
-
-                        if (numInstallmentsCovered < 0.99) { // Usar 0.99 para evitar errores de punto flotante
-                            description = translations[currentLang].partialPaymentDesc.replace('{percent}', (numInstallmentsCovered * 100).toFixed(0));
-                        } else if (numInstallmentsCovered >= 0.99 && numInstallmentsCovered < 1.01) {
-                            description = translations[currentLang].fullPaymentDesc.replace('{installment}', installmentNumberStart);
-                        } else {
-                            const endInstallment = installmentNumberStart + fullInstallments - 1;
-                            title = translations[currentLang].paymentInstallmentsTitle
-                                .replace('{start}', installmentNumberStart)
-                                .replace('{end}', endInstallment > installmentNumberStart ? endInstallment : '');
-                            
-                             if (partialPercent > 1) { // Usar > 1 para ignorar pequeños residuos
-                                description = translations[currentLang].multiplePaymentDesc
-                                    .replace('{count}', fullInstallments)
-                                    .replace('{percent}', partialPercent);
-                            } else {
-                                description = translations[currentLang].multipleFullPaymentDesc.replace('{count}', fullInstallments);
-                            }
-                        }
-
-                        cumulativePaid += p.amount;
-
-                        return {
-                            ...p,
-                            dateTimeString: new Date(p.date.seconds * 1000).toLocaleString(currentLang, { dateStyle: 'short', timeStyle: 'short'}),
-                            title: title,
-                            description: description,
-                        };
-                    });
                 
-                historyHtml = paymentDetails.reverse() 
-                    .map(p => {
-                         let statusTag = '';
-                        if (p.status === 'pending_verification') {
-                            statusTag = `<span class="payment-status-tag pending">${translations[currentLang].awaitingVerification}</span>`;
-                        } else if (p.status === 'approved' || !p.status) {
-                            statusTag = `<span class="payment-status-tag approved">${translations[currentLang].approved}</span>`;
-                        }
+                // --- INICIO: CORRECCIÓN FILTRO Y CÁLCULO DE CUOTA ---
+                const now = new Date();
+                const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
+
+                // 1. Filtra los pagos a mostrar
+                const filteredHistory = [...currentLoan.history]
+                    .filter(p => {
+                        if (!p.date?.seconds) return false; // Ignora sin fecha
+                        const paymentTimestamp = p.date.seconds * 1000;
+                        const isApproved = p.status === 'approved' || (!p.status && p.date); // Aprobado o antiguo sin estado
+                        const isRecentPending = p.status === 'pending_verification' && paymentTimestamp >= twentyFourHoursAgo;
+                        return isApproved || isRecentPending;
+                    })
+                    .sort((a, b) => a.date.seconds - b.date.seconds); // Ordena cronológicamente
+
+                // 2. Mapea los pagos filtrados calculando el número de cuota CORRECTAMENTE
+                let approvedCumulativePaidForNumbering = 0; // Contador SOLO para pagos aprobados
+                const paymentDetails = filteredHistory.map(p => {
+                    
+                    // Calcula el número de cuota basado SÓLO en los aprobados ANTERIORES
+                    const installmentNumberStart = (originalInstallment > 0) 
+                        ? Math.floor(approvedCumulativePaidForNumbering / originalInstallment) + 1 
+                        : 1; 
+
+                    let title = '';
+                    let description = '';
+                    const numInstallmentsCovered = (originalInstallment > 0 && p.amount) ? p.amount / originalInstallment : 0;
+                    const fullInstallments = Math.floor(numInstallmentsCovered);
+                    const partialPercent = Math.round((numInstallmentsCovered - fullInstallments) * 100);
+
+                    // Lógica para título/descripción (SIN CAMBIOS, usa el installmentNumberStart correcto)
+                    if (numInstallmentsCovered < 0.99) {
+                        title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
+                        description = translations[currentLang].partialPaymentDesc.replace('{percent}', (numInstallmentsCovered * 100).toFixed(0));
+                    } else if (numInstallmentsCovered >= 0.99 && numInstallmentsCovered < 1.01) {
+                         title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
+                        description = translations[currentLang].fullPaymentDesc.replace('{installment}', installmentNumberStart);
+                    } else {
+                        const endInstallment = installmentNumberStart + fullInstallments - 1;
+                        title = translations[currentLang].paymentInstallmentsTitle
+                            .replace('{start}', installmentNumberStart)
+                            .replace('{end}', endInstallment > installmentNumberStart ? endInstallment : '');
                         
-                        return `<div class="payment-history-item">
-                                    <div class="payment-info">
-                                        <h4 class="payment-title">${p.title}</h4>
-                                        <p class="payment-description">${p.description}</p>
-                                        <span class="payment-date">${p.dateTimeString}</span>
-                                    </div>
-                                    <div class="payment-status-wrapper">
-                                        <span class="payment-amount" style="color: ${p.status !== 'pending_verification' ? 'var(--accent-green)' : 'var(--text-secondary)'}">${money(p.amount)}</span>
-                                        ${statusTag}
-                                    </div>
-                                </div>`;
-                    }).join('');
+                         if (partialPercent > 1) {
+                            description = translations[currentLang].multiplePaymentDesc
+                                .replace('{count}', fullInstallments)
+                                .replace('{percent}', partialPercent);
+                        } else {
+                            description = translations[currentLang].multipleFullPaymentDesc.replace('{count}', fullInstallments);
+                        }
+                    }
+                    
+                    // IMPORTANTE: Incrementa el contador SOLO si el pago actual es aprobado
+                    if (p.status === 'approved' || (!p.status && p.date)) {
+                        approvedCumulativePaidForNumbering += (p.amount || 0);
+                    }
+
+                    // Objeto de retorno (SIN CAMBIOS)
+                    return {
+                        ...p,
+                        dateTimeString: new Date(p.date.seconds * 1000).toLocaleString(currentLang, { dateStyle: 'short', timeStyle: 'short'}),
+                        title: title,
+                        description: description,
+                    };
+                });
+                
+                // 3. Renderiza el HTML (Invierte para mostrar más nuevo primero)
+                if (paymentDetails.length > 0) {
+                    historyHtml = paymentDetails.reverse() 
+                        .map(p => {
+                             let statusTag = '';
+                            if (p.status === 'pending_verification') {
+                                statusTag = `<span class="payment-status-tag pending">${translations[currentLang].awaitingVerification}</span>`;
+                            } else if (p.status === 'approved' || !p.status) {
+                                statusTag = `<span class="payment-status-tag approved">${translations[currentLang].approved}</span>`;
+                            } // Los rechazados ya no están en paymentDetails
+                            
+                            return `<div class="payment-history-item">
+                                        <div class="payment-info">
+                                            <h4 class="payment-title">${p.title}</h4>
+                                            <p class="payment-description">${p.description}</p>
+                                            <span class="payment-date">${p.dateTimeString}</span>
+                                        </div>
+                                        <div class="payment-status-wrapper">
+                                            <span class="payment-amount" style="color: ${p.status === 'pending_verification' ? 'var(--text-secondary)' : 'var(--accent-green)'}">${money(p.amount)}</span>
+                                            ${statusTag}
+                                        </div>
+                                    </div>`;
+                        }).join('');
+                } else {
+                    // Si después de filtrar no queda nada, muestra el mensaje
+                    historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
+                }
+                // --- FIN: CORRECCIÓN FILTRO Y CÁLCULO DE CUOTA ---
             }
             
+                       
             document.getElementById('progress-text').textContent = `${paidInstallments}/${totalInstallments}`;
             document.getElementById('progress-bar').style.strokeDashoffset = strokeDashoffset;
             document.getElementById('total-value').textContent = money(totalAmount);
@@ -2742,5 +2773,4 @@ init();
     </script>
 </body>
 </html>
-
 
