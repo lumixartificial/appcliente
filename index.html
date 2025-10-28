@@ -1225,22 +1225,34 @@
 
         function renderLoanTabs() {
             const tabsContainer = document.getElementById('loan-tabs-container');
-            if (!tabsContainer || !currentClient) return;
+            if (!tabsContainer || !currentClient || !currentClient.loans) return; // Añade chequeo de loans
 
-            // [CORRECCIÓN] Mapear primero para conservar el índice original antes de filtrar.
-            const loansWithOriginalIndex = (currentClient.loans || []).map((loan, index) => ({ ...loan, originalIndex: index }));
-            const activeLoans = loansWithOriginalIndex.filter(l => l.status === 'active');
-            
-            if (activeLoans.length > 1) {
+            // --- INICIO: CORRECCIÓN ESTADO OBSOLETO ---
+            // 1. Mapea y RECALCULA el estado de CADA préstamo ANTES de filtrar
+            const loansWithStatusAndIndex = currentClient.loans.map((loan, index) => {
+                const details = calculateLoanDetails(loan); // Calcula estado real
+                return { 
+                    ...loan, 
+                    calculatedStatus: details.status, // Guarda el estado calculado
+                    originalIndex: index 
+                };
+            });
+
+            // 2. Filtra usando el estado RECALCULADO ('calculatedStatus')
+            const displayableLoans = loansWithStatusAndIndex.filter(l => l.calculatedStatus !== 'finished');
+            // --- FIN: CORRECCIÓN ---
+
+            // Muestra pestañas si hay MÁS DE UNO no finalizado
+            if (displayableLoans.length > 1) {
                 tabsContainer.style.display = 'flex';
-                // [CORRECCIÓN] Usar el 'originalIndex' guardado en el dataset y para la comparación.
-                tabsContainer.innerHTML = activeLoans.map((loan) => `
+                // Renderiza usando 'originalIndex' y comparando con 'selectedLoanIndex' global
+                tabsContainer.innerHTML = displayableLoans.map((loan) => `
                     <button class="loan-tab ${loan.originalIndex === selectedLoanIndex ? 'active' : ''}" data-index="${loan.originalIndex}">
                         ${translations[currentLang].loanLabel} ${loan.originalIndex + 1}
                     </button>
                 `).join('');
             } else {
-                tabsContainer.style.display = 'none';
+                tabsContainer.style.display = 'none'; // Oculta si solo hay uno (o ninguno) activo
             }
         }
 
@@ -1344,14 +1356,28 @@
             const currentLoan = currentClient.loans[selectedLoanIndex];
             if (!currentLoan) return;
 
-            const paidAmount = currentLoan.paid || 0;
+            // --- INICIO: CORRECCIÓN CÁLCULO DE PROGRESO ---
+            // 1. Recalcula el total pagado REAL desde el historial aprobado
+            const paidAmount = (currentLoan.history || [])
+                .filter(h => h.status === 'approved' || (!h.status && h.date)) // Considera 'approved' o sin estado (pagos antiguos)
+                .reduce((sum, h) => sum + (h.amount || 0), 0);
+                
             const totalAmount = currentLoan.totalLoan || 0;
             const remainingAmount = Math.max(0, totalAmount - paidAmount);
+
+            // 2. Llama a calculateLoanDetails para obtener el estado ACTUAL y otros detalles
+            const loanDetails = calculateLoanDetails(currentLoan); // ¡Importante! Usa la lógica centralizada
+            currentLoan.status = loanDetails.status; // Actualiza el estado en el objeto local
+
+            // 3. Calcula cuotas pagadas basado en el 'paidAmount' recalculado y el valor original
             
-            const originalInstallment = currentLoan.originalInstallmentAmount || 1; // Evitar división por cero
-            const totalInstallments = currentLoan.totalInstallments || 0;
+            const originalInstallment = currentLoan.originalInstallmentAmount || 1; // Evita división por cero
+            
+            const totalInstallments = currentLoan.installments ? parseInt((currentLoan.installments || '0/0').split('/')[1], 10) : 0;
+            // Asegura que las cuotas pagas no excedan el total
             const paidInstallments = totalInstallments > 0 ? Math.min(totalInstallments, Math.floor(paidAmount / originalInstallment)) : 0;
             const progressPercentage = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0;
+            // --- FIN: CORRECCIÓN CÁLCULO DE PROGRESO ---
             
             const circleCircumference = 2 * Math.PI * 54;
             const strokeDashoffset = circleCircumference - (progressPercentage / 100) * circleCircumference;
@@ -2716,4 +2742,5 @@ init();
     </script>
 </body>
 </html>
+
 
