@@ -707,7 +707,7 @@
                 newAmount: 'Novo Valor Desejado',
                 newInstallments: 'Número de Parcelas',
                 sendForAnalysis: 'Enviar para Análise',
-                analysisSent: 'Solicitação enviada para análise!',
+                analysisSent: 'Solicitação enviada para análise, aguarde o contato do seu cobrador!',
                 refinanceRequested: 'solicitou um refinanciamento de',
                 reputationNotGoodTitle: 'Melhore sua Pontuação',
                 reputationNotGoodMsg: 'Para solicitar um refinanciamento, sua pontuação de reputação precisa ser "Perfeita". Continue pagando suas parcelas em dia!',
@@ -1627,6 +1627,7 @@
             lucide.createIcons({nodes: payViewContainer.querySelectorAll('[data-lucide]')});
         }
 
+        
         function updateRefinanceView() {
             if (!currentClient || !document.getElementById('refinance-view')) return;
             const container = document.getElementById('refinance-view');
@@ -1637,13 +1638,36 @@
             const score = Math.max(0, 10 - lateDays);
             let content = '';
 
-            if (currentClient.refinanceRequest) {
-                content = `<div class="container kpi-card"><h2 class="section-title" data-lang-key="refinanceTitle"></h2><p>${translations[currentLang].analysisSent}</p></div>`;
-            } else if (score === 10) {
-                content = `<div class="container"><h2 class="section-title" data-lang-key="refinanceTitle"></h2><div class="kpi-card"><form id="refinance-form"><div class="form-group"><label for="refinance-amount" data-lang-key="newAmount"></label><input type="number" id="refinance-amount" class="form-control" required></div><div class="form-group"><label for="refinance-installments" data-lang-key="newInstallments"></label><input type="number" id="refinance-installments" class="form-control" required></div><button type="submit" class="btn-primary" style="width:100%;"><span data-lang-key="sendForAnalysis"></span></button></form></div></div>`;
-            } else {
-                content = `<div class="container kpi-card"><h2 class="section-title" data-lang-key="reputationNotGoodTitle"></h2><p>${translations[currentLang].reputationNotGoodMsg}</p></div>`;
+            // --- INICIO: LÓGICA CORREGIDA ---
+            // Solo comprueba la puntuación. Si es 10, muestra el formulario.
+            if (score === 10) { 
+                content = `<div class="container">
+                               <h2 class="section-title" data-lang-key="refinanceTitle"></h2>
+                               <div class="kpi-card">
+                                   <form id="refinance-form">
+                                       <div class="form-group">
+                                           <label for="refinance-amount" data-lang-key="newAmount"></label>
+                                           <input type="number" id="refinance-amount" class="form-control" required>
+                                       </div>
+                                       <div class="form-group">
+                                           <label for="refinance-installments" data-lang-key="newInstallments"></label>
+                                           <input type="number" id="refinance-installments" class="form-control" required>
+                                       </div>
+                                       <button type="submit" class="btn-primary" style="width:100%;">
+                                           <span data-lang-key="sendForAnalysis"></span>
+                                       </button>
+                                   </form>
+                               </div>
+                               ${currentClient.refinanceRequest ? `<p style="text-align: center; margin-top: 15px; font-size: 0.9em; color: var(--text-secondary);">${translations[currentLang].analysisSent}</p>` : ''}
+                           </div>`;
+            } else { // Si la puntuación no es 10, muestra el mensaje de mejora.
+                content = `<div class="container kpi-card">
+                               <h2 class="section-title" data-lang-key="reputationNotGoodTitle"></h2>
+                               <p>${translations[currentLang].reputationNotGoodMsg}</p>
+                           </div>`;
             }
+            // --- FIN: LÓGICA CORREGIDA ---
+
             container.innerHTML = content;
             applyLanguage(currentLang);
             
@@ -1651,25 +1675,63 @@
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const amount = parseFloat(document.getElementById('refinance-amount').value);
-                    const installments = parseInt(document.getElementById('refinance-installments').value, 10);
+                    const amountInput = document.getElementById('refinance-amount');
+                    const installmentsInput = document.getElementById('refinance-installments');
+                    const submitBtn = form.querySelector('button[type="submit"]'); // <-- Captura el botón
+                    const originalBtnHTML = submitBtn.innerHTML; // <-- Guarda HTML original
+
+                    const amount = parseFloat(amountInput.value);
+                    const installments = parseInt(installmentsInput.value, 10);
+                    
                     if (isNaN(amount) || amount <= 0 || isNaN(installments) || installments <= 0) {
                         showToast(translations[currentLang].invalidAmount, true);
                         return;
                     }
+
+                    // --- INICIO: Añadir indicador de carga ---
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+                    lucide.createIcons({ nodes: [submitBtn.querySelector('i')] });
+                    // --- FIN: Añadir indicador de carga ---
+
                     try {
                         const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
-                        await updateDoc(clientRef, { refinanceRequest: { amount: amount, installments: installments, requestDate: new Date(), status: 'pending' } });
+                        // Guarda la nueva solicitud (sobrescribe la anterior si existía)
+                        await updateDoc(clientRef, { 
+                            refinanceRequest: { 
+                                amount: amount, 
+                                installments: installments, 
+                                requestDate: new Date(), // Usa new Date() en lugar de serverTimestamp para consistencia
+                                status: 'pending' 
+                            } 
+                        });
                         showToast(translations[currentLang].analysisSent);
-                        sendNotificationToCollector(`${currentClient.name}`, `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 'refinance');
-                        updateRefinanceView();
+                        // Llama a la función para notificar al cobrador (esta ya estaba correcta)
+                        sendNotificationToCollector(
+                            `${currentClient.name}`, 
+                            `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 
+                            'refinance', // tipo
+                            'trending-up' // icono
+                        );
+                        // Actualiza la vista para mostrar "Solicitação enviada" de nuevo
+                        updateRefinanceView(); 
+
                     } catch (error) {
                         console.error("Error sending refinance request:", error);
                         showToast(translations[currentLang].genericError, true);
-                    }
+                        // --- INICIO: Restaurar botón en error ---
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHTML;
+                        // --- FIN: Restaurar botón en error ---
+                    } 
+                    // No necesitamos 'finally' aquí si no restauramos el botón en caso de éxito
                 });
             }
         }
+
+
+
+
 
         function updateNotificationsView() {
             if (!currentClient || !document.getElementById('notifications-list')) return;
@@ -2773,4 +2835,3 @@ init();
     </script>
 </body>
 </html>
-
