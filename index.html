@@ -1803,20 +1803,22 @@
         }
         console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
 
-        // [NUEVA LÍNEA AÑADIDA] Espera a que el SW esté activo
+        
         console.log(`${LOG_PREFIX} Esperando que el Service Worker esté listo...`);
-        const registration = await navigator.serviceWorker.ready;
-        console.log(`${LOG_PREFIX} ¡Service Worker listo y activo!`, registration);
+                const registration = await navigator.serviceWorker.ready;
+                console.log(`${LOG_PREFIX} ¡Service Worker listo y activo!`, registration);
+                
+                // Verificación adicional: Asegura que el SW esté controlando la página
+                // A veces, el SW está listo pero aún no controla la página actual.
+                if (!navigator.serviceWorker.controller) {
+                    console.warn(`${LOG_PREFIX} Service Worker listo, pero aún no controla la página. Esperando activación...`);
+                    // Espera un evento que indique que el controlador ha cambiado
+                    await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+                     console.log(`${LOG_PREFIX} ¡Service Worker ahora controla la página!`);
+                } else {
+                     console.log(`${LOG_PREFIX} Service Worker ya controla la página.`);
+                }
 
-
-        if (!navigator.serviceWorker.controller) {
-            console.warn(`${LOG_PREFIX} Service Worker listo, pero aún no controla la página. Esperando activación...`);
-            // Espera un evento que indique que el controlador ha cambiado
-            await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
-            console.log(`${LOG_PREFIX} ¡Service Worker ahora controla la página!`);
-        } else {
-             console.log(`${LOG_PREFIX} Service Worker ya controla la página.`);
-        }
 
 
                 const messaging = getMessaging(app);
@@ -2835,3 +2837,4 @@ init();
     </script>
 </body>
 </html>
+
