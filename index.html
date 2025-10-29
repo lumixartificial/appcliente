@@ -2408,52 +2408,66 @@ function showCropperModal(file) {
                 }
             });
         }
-        async function sendNotificationToCollector(title, body, type = 'payment', icon = 'info') { // Añadido 'icon' por consistencia
-        // Verifica que tengamos el ID (username) del cobrador
-        if (!currentCollectorId) { // <-- Usa la variable global 'currentCollectorId'
-             console.warn("[CLIENTE-APP] No se puede enviar notificación al cobrador: ID del cobrador no disponible.");
-             return;
-        }
-        // Verifica que tengamos el ID del cliente
-         if (!currentClientId) {
-             console.warn("[CLIENTE-APP] No se puede enviar notificación al cobrador: ID del cliente no disponible.");
-             return;
-         }
+        
 
-        try {
-            // [CORRECCIÓN RUTA] Usa la variable global 'currentCollectorId' que contiene el username
-            const notificationsCollectionRef = collection(db, 'collectors', currentCollectorId, 'notifications');
 
-            // Prepara los datos a guardar
-            const notificationData = {
-                title: title,
-                body: body,
-                from: currentClient?.name || 'Cliente Desconhecido', // Usa ?. por seguridad
-                clientId: currentClientId, // <-- [CORRECCIÓN] Usa la variable global
-                timestamp: serverTimestamp(),
-                read: false,
-                type: type, // 'payment' o 'refinance'
-                icon: icon, // Añadido para consistencia con notificaciones internas
-                // Asegúrate que currentClient exista antes de acceder a profilePictureUrl
-                profilePictureUrl: currentClient?.profilePictureUrl || ''
-            };
+        // BLOQUE PARA PEGAR EN: app_cliente.html
 
-            // Añade logs específicos ANTES y DESPUÉS de escribir
-            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: Intentando escribir notificación en Firestore en ruta: collectors/${currentCollectorId}/notifications`);
-            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: Datos a escribir:`, notificationData);
-
-            await addDoc(notificationsCollectionRef, notificationData);
-
-            // [CORRECCIÓN LOG] Mensaje de log corregido
-            console.log(`[CLIENTE-APP] -> sendNotificationToCollector: ¡ÉXITO! Notificación para el cobrador escrita en Firestore.`);
-
-        } catch (error) {
-            // Log de error más detallado
-            console.error(`[CLIENTE-APP] -> sendNotificationToCollector: ERROR al escribir notificación para el cobrador en Firestore (ruta: collectors/${currentCollectorId}/notifications):`, error);
-            // Considera mostrar un toast si este error es crítico
-            // showToast('Falha ao notificar o cobrador.', true);
-        }
+async function sendNotificationToCollector(title, body, type = 'payment', icon = 'info') {
+    // Verifica que tengamos el ID (username) del cobrador y el ID del cliente
+    if (!currentCollectorId || !currentClientId) {
+        console.warn("[CLIENTE->COBRADOR] No se puede enviar notificación: IDs no disponibles.");
+        return;
     }
+
+    try {
+        // 1. Notificación INTERNA (igual que antes)
+        const notificationsCollectionRef = collection(db, 'collectors', currentCollectorId, 'notifications');
+        const notificationData = {
+            title: title,
+            body: body,
+            from: currentClient?.name || 'Cliente Desconhecido',
+            clientId: currentClientId, // Incluye el ID del cliente que envía
+            timestamp: serverTimestamp(), // Fecha/hora del servidor
+            read: false,
+            type: type,
+            icon: icon,
+            profilePictureUrl: currentClient?.profilePictureUrl || ''
+        };
+        console.log(`[CLIENTE->COBRADOR] Enviando notificación INTERNA a: collectors/${currentCollectorId}/notifications`);
+        await addDoc(notificationsCollectionRef, notificationData);
+        console.log(`[CLIENTE->COBRADOR] Notificación INTERNA enviada.`);
+
+        // 2. [LÓGICA PUSH AÑADIDA] Ticket PUSH para el COBRADOR
+        //    Esto crea el documento que disparará la Cloud Function para el cobrador.
+        //    La ruta lógica es 'collectors/{collectorId}/pushNotificationTickets'
+        const collectorTicketRef = collection(db, 'collectors', currentCollectorId, 'pushNotificationTickets');
+        
+        const ticketData = {
+            title: title,
+            body: body,
+            type: type, // 'payment', 'refinance'
+            icon: icon, // El SW del cobrador espera 'icon'
+            // [ADICIÓN IMPORTANTE] Tus SW esperan un campo 'url' en 'payload.data'.
+            // Debemos añadirlo al ticket. Esta URL debe llevar al cobrador al cliente específico.
+            url: `https://lumix-financas-app.web.app/collector/index.html?page=client-details&clientId=${currentClientId}`,
+            // Puedes añadir más datos útiles para la Cloud Function del cobrador
+            senderClientId: currentClientId,
+            senderClientName: currentClient?.name || 'Cliente Desconhecido',
+            createdAt: serverTimestamp()
+        };
+        console.log(`[CLIENTE->COBRADOR] Creando ticket PUSH en: collectors/${currentCollectorId}/pushNotificationTickets`);
+        await addDoc(collectorTicketRef, ticketData);
+        console.log(`[CLIENTE->COBRADOR] Ticket PUSH para el cobrador creado.`);
+
+    } catch (error) {
+        console.error(`[CLIENTE->COBRADOR] ERROR al enviar notificación/ticket al cobrador:`, error);
+        // Considera mostrar un toast si este error es crítico
+        // showToast('Falha ao notificar o cobrador.', true);
+    }
+}
+
+
         
         async function handleReceiptSubmission(button) {
     // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
@@ -2840,5 +2854,6 @@ init();
     </script>
 </body>
 </html>
+
 
 
