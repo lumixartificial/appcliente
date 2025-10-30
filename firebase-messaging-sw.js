@@ -32,6 +32,10 @@ messaging.onBackgroundMessage((payload) => {
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
+// [MODIFICACIÓN] Se eliminan los listeners 'install' y 'activate'
+// que contenían self.skipWaiting() y self.clients.claim().
+// Esto previene posibles bucles de recarga y permite actualizaciones más seguras.
+/*
 self.addEventListener('install', (event) => {
   console.log(`[SW-CLIENTE ${SW_VERSION}] Instalando y forzando activación inmediata.`);
   event.waitUntil(self.skipWaiting());
@@ -41,8 +45,9 @@ self.addEventListener('activate', (event) => {
   console.log(`[SW-CLIENTE ${SW_VERSION}] Activado y tomando control.`);
   event.waitUntil(self.clients.claim());
 });
+*/
 
-// [SOLUCIÓN ROBUSTA Y DEFINITIVA]
+// [SIN CAMBIOS] La lógica robusta de notificationclick se mantiene
 self.addEventListener('notificationclick', (event) => {
     const targetUrl = event.notification.data.url || self.location.origin;
     event.notification.close();
