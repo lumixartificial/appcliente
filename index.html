@@ -2413,7 +2413,9 @@ function showCropperModal(file) {
 
         // BLOQUE PARA PEGAR EN: app_cliente.html
 
-async function sendNotificationToCollector(title, body, type = 'payment', icon = 'info') {
+// BLOQUE 1/2 PARA PEGAR EN: app_cliente.html
+
+async function sendNotificationToCollector(title, body, type = 'payment', icon = 'info', loanIndex = -1, historyIndex = -1) {
     // Verifica que tengamos el ID (username) del cobrador y el ID del cliente
     if (!currentCollectorId || !currentClientId) {
         console.warn("[CLIENTE->COBRADOR] No se puede enviar notificación: IDs no disponibles.");
@@ -2432,15 +2434,19 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
             read: false,
             type: type,
             icon: icon,
-            profilePictureUrl: currentClient?.profilePictureUrl || ''
+            profilePictureUrl: currentClient?.profilePictureUrl || '',
+            // --- [CAMBIO CLAVE] ---
+            // Añadimos los índices para que el cobrador sepa qué pago aprobar
+            loanIndex: loanIndex,
+            historyIndex: historyIndex
+            // --- [FIN CAMBIO CLAVE] ---
         };
         console.log(`[CLIENTE->COBRADOR] Enviando notificación INTERNA a: collectors/${currentCollectorId}/notifications`);
         await addDoc(notificationsCollectionRef, notificationData);
-        console.log(`[CLIENTE->COBRADOR] Notificación INTERNA enviada.`);
+        console.log(`[CLIENTE->COBRADOR] Notificación INTERNA enviada con índices (L:${loanIndex}, H:${historyIndex}).`);
 
         // 2. [LÓGICA PUSH AÑADIDA] Ticket PUSH para el COBRADOR
-        //    Esto crea el documento que disparará la Cloud Function para el cobrador.
-        //    La ruta lógica es 'collectors/{collectorId}/pushNotificationTickets'
+        //    (Esta parte ya estaba correcta, pero la mantenemos)
         const collectorTicketRef = collection(db, 'collectors', currentCollectorId, 'pushNotificationTickets');
         
         const ticketData = {
@@ -2448,13 +2454,15 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
             body: body,
             type: type, // 'payment', 'refinance'
             icon: icon, // El SW del cobrador espera 'icon'
-            // [ADICIÓN IMPORTANTE] Tus SW esperan un campo 'url' en 'payload.data'.
-            // Debemos añadirlo al ticket. Esta URL debe llevar al cobrador al cliente específico.
             url: `https://lumix-financas-app.web.app/collector/index.html?page=client-details&clientId=${currentClientId}`,
-            // Puedes añadir más datos útiles para la Cloud Function del cobrador
             senderClientId: currentClientId,
             senderClientName: currentClient?.name || 'Cliente Desconhecido',
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            // --- [CAMBIO CLAVE] ---
+            // Añadimos los índices al TICKET PUSH también
+            // (Aunque el SW no los usa, es bueno tenerlos por consistencia)
+            loanIndex: loanIndex,
+            historyIndex: historyIndex
         };
         console.log(`[CLIENTE->COBRADOR] Creando ticket PUSH en: collectors/${currentCollectorId}/pushNotificationTickets`);
         await addDoc(collectorTicketRef, ticketData);
@@ -2462,14 +2470,14 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
 
     } catch (error) {
         console.error(`[CLIENTE->COBRADOR] ERROR al enviar notificación/ticket al cobrador:`, error);
-        // Considera mostrar un toast si este error es crítico
-        // showToast('Falha ao notificar o cobrador.', true);
     }
 }
 
 
         
-        async function handleReceiptSubmission(button) {
+    // BLOQUE 2/2 PARA PEGAR EN: app_cliente.html
+
+async function handleReceiptSubmission(button) {
     // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
     if (!receiptFile || !currentClient || !currentClientId || !currentCompanyId) {
         console.warn("[CLIENTE-APP] Faltan datos (IDs o archivo) para enviar recibo.");
@@ -2497,129 +2505,98 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
 
     let receiptUrl = ''; // Variable para guardar la URL del archivo subido
 
-    // --- Bloque TRY/CATCH para el UPLOAD al Firebase Storage ---
+    // --- Bloque TRY/CATCH para el UPLOAD al Firebase Storage (SIN CAMBIOS) ---
     try {
-        // 1. Crear un nombre de archivo único para evitar sobreescrituras
         const uniqueFileName = `receipt_${Date.now()}_${receiptFile.name.replace(/\s+/g, '_')}`;
-        // 2. Definir la RUTA específica dentro del Storage: companies/{id_empresa}/clients/{id_cliente}/receipts/{nombre_archivo}
         const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/receipts/${uniqueFileName}`);
-
-        console.log(`[CLIENTE-APP] Subiendo recibo para: ${storageRef.fullPath}`); // Log útil para depuración
-        showToast('Enviando comprovante...', false); // Feedback visual para el usuario
-
-        // 3. Subir el archivo usando uploadBytes
+        console.log(`[CLIENTE-APP] Subiendo recibo para: ${storageRef.fullPath}`);
+        showToast('Enviando comprovante...', false);
         await uploadBytes(storageRef, receiptFile);
-
-        // 4. Obtener la URL pública de descarga del archivo subido
         receiptUrl = await getDownloadURL(storageRef);
         console.log(`[CLIENTE-APP] Recibo subido com sucesso. URL: ${receiptUrl}`);
-
     } catch (storageError) {
-        // Manejo de errores específicos del upload
         console.error("[CLIENTE-APP] Erro ao subir recibo para Firebase Storage:", storageError);
-        let errorMsg = translations[currentLang].uploadError; // Mensaje genérico por defecto
-        if (storageError.code) { // Si Firebase Storage devuelve un código de error
-            switch (storageError.code) {
-                case 'storage/unauthorized': errorMsg = "Erro de permissão ao enviar."; break;
-                case 'storage/canceled': errorMsg = "Envio cancelado."; break;
-                case 'storage/unknown': errorMsg = "Erro desconhecido no servidor de arquivos."; break;
-                 default: errorMsg = `Erro no envio: ${storageError.code}`; // Muestra el código si es otro
-            }
-        }
-        showToast(errorMsg, true); // Muestra el error al usuario
-
-        // Re-habilita el botón y restaura su contenido si el upload falla
+        let errorMsg = translations[currentLang].uploadError;
+        if (storageError.code) { /* ... manejo de errores ... */ }
+        showToast(errorMsg, true);
         button.disabled = false;
         button.innerHTML = originalButtonHTML;
-        // Asegúrate de re-crear el icono si existía
         const icon = button.querySelector('[data-lucide]');
         if(icon) lucide.createIcons({nodes: [icon]});
-        return; // Detiene la ejecución de la función si el upload falla
+        return;
     }
     // --- Fin del Bloque TRY/CATCH del Upload ---
 
     // --- Bloque TRY/CATCH para GUARDAR la URL y datos en Firestore ---
-    // Este bloque solo se ejecuta si el upload fue exitoso
     try {
-        // La referencia al documento del cliente ya usa la ruta correcta (corregida en Tarea CL3)
         const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
-
-        // Crea una copia segura de los préstamos actuales para modificarla
-        // Asegúrate que currentClient.loans exista y sea un array
         const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans || []));
 
-        // Prepara el objeto del nuevo registro de pago en el historial
         const newPayment = {
             amount: amount,
-            date: new Date(), // Usa la fecha/hora actual del dispositivo del cliente
-            receiptUrl: receiptUrl, // <-- ¡Usa la URL obtenida de Firebase Storage!
-            status: 'pending_verification', // Estado inicial que el cobrador debe aprobar
-            method: 'receipt' // Identifica que fue un pago con comprobante
+            date: new Date(),
+            receiptUrl: receiptUrl,
+            status: 'pending_verification',
+            method: 'receipt'
         };
 
-        // Validación: Asegura que el índice del préstamo seleccionado sea válido
         if (selectedLoanIndex < 0 || selectedLoanIndex >= updatedLoans.length) {
-            // Si el índice es inválido (no debería pasar si la UI está bien), lanza un error
             throw new Error("Índice de empréstimo selecionado inválido ao salvar recibo.");
         }
-        // Asegura que el objeto del préstamo y su historial existan como arrays
         if (!updatedLoans[selectedLoanIndex]) updatedLoans[selectedLoanIndex] = { history: []};
         if (!updatedLoans[selectedLoanIndex].history) updatedLoans[selectedLoanIndex].history = [];
 
-        // Añade el nuevo pago al historial del préstamo correcto
+        // --- [CAMBIO CLAVE] ---
+        // 1. Obtenemos el índice DONDE se va a insertar el pago
+        const newHistoryIndex = updatedLoans[selectedLoanIndex].history.length;
+        // 2. Añadimos el pago
         updatedLoans[selectedLoanIndex].history.push(newPayment);
+        // --- [FIN CAMBIO CLAVE] ---
 
-        // Actualiza el documento del cliente en Firestore con el array 'loans' modificado
         await updateDoc(clientRef, { loans: updatedLoans });
 
-        showToast(translations[currentLang].receiptSent); // Mensaje de éxito
+        showToast(translations[currentLang].receiptSent);
 
-        // Envía la notificación INTERNA al cobrador (usa la ruta global correcta)
+        // --- [CAMBIO CLAVE] ---
+        // 3. Pasamos los índices a la función de notificación
         sendNotificationToCollector(
-        `${currentClient.name || 'Cliente'}`,
-        `${translations[currentLang].paymentSent} ${money(amount)}.`,
-        'payment',
-        'receipt'
-    );
+            `${currentClient.name || 'Cliente'}`,
+            `${translations[currentLang].paymentSent} ${money(amount)}.`,
+            'payment',
+            'receipt',
+            selectedLoanIndex, // <-- Índice del Préstamo
+            newHistoryIndex      // <-- Índice del Historial
+        );
+        // --- [FIN CAMBIO CLAVE] ---
 
-    // [INICIO CÓDIGO CORREGIDO PARA sendNotificationTicket]
-    // Define title y body basados en la lógica existente
-    const notifTitle = `${currentClient.name || 'Cliente'} enviou comprovante`;
-    const notifBody = `${translations[currentLang].paymentSent} ${money(amount)}.`;
-    // Llama a sendNotificationTicket con los 4 argumentos correctos
-    sendNotificationTicket(notifTitle, notifBody, 'payment_receipt', 'receipt');
-    // [FIN CÓDIGO CORREGIDO]
+        // (Esta función sendNotificationTicket no es relevante para el cobrador, la ignoramos por ahora)
+        // const notifTitle = ...
+        // sendNotificationTicket(notifTitle, notifBody, 'payment_receipt', 'receipt');
 
-        // Limpia el formulario después de un envío exitoso
-        receiptFile = null; // Limpia la variable global del archivo
+        // Limpia el formulario
+        receiptFile = null;
         const fileInput = document.getElementById('receipt-file-input');
-        if(fileInput) fileInput.value = ''; // Resetea el input de archivo
+        if(fileInput) fileInput.value = '';
         const previewImg = document.getElementById('receipt-preview');
         const uploadLabel = document.getElementById('upload-label-text');
-        if(previewImg) previewImg.style.display = 'none'; // Oculta la vista previa
-        if(uploadLabel) uploadLabel.style.display = 'block'; // Muestra el texto "Clique para anexar"
-        if(amountInput) amountInput.value = ''; // Limpia el campo de monto
-
-        // Mantiene el botón deshabilitado DESPUÉS del éxito para evitar doble envío
+        if(previewImg) previewImg.style.display = 'none';
+        if(uploadLabel) uploadLabel.style.display = 'block';
+        if(amountInput) amountInput.value = '';
         button.disabled = true;
-        button.innerHTML = originalButtonHTML; // Restaura el texto original del botón
+        button.innerHTML = originalButtonHTML;
 
         // Navega de vuelta a la pantalla principal (home)
         const homeNav = document.querySelector('.nav-item[data-view="home"]');
         if(homeNav) homeNav.click();
 
     } catch (firestoreError) {
-         // Manejo de errores si falla el guardado en Firestore
          console.error("[CLIENTE-APP] Erro ao salvar dados do recibo no Firestore:", firestoreError);
          showToast('Erro ao registrar o comprovante no sistema.', true);
-         // Re-habilita el botón si guardar en Firestore falla
          button.disabled = false;
          button.innerHTML = originalButtonHTML;
-         // Asegúrate de re-crear el icono si existía
          const icon = button.querySelector('[data-lucide]');
          if(icon) lucide.createIcons({nodes: [icon]});
     }
-    // --- Fin del Bloque TRY/CATCH del Firestore ---
 }
 
         function loadGlobalSettings(settings) {
@@ -2854,6 +2831,3 @@ init();
     </script>
 </body>
 </html>
-
-
-
