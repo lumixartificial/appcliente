@@ -1430,9 +1430,7 @@
             currentLoan.status = loanDetails.status; // Actualiza el estado en el objeto local
 
             // 3. Calcula cuotas pagadas basado en el 'paidAmount' recalculado y el valor original
-            
             const originalInstallment = currentLoan.originalInstallmentAmount || 1; // Evita división por cero
-            
             const totalInstallments = currentLoan.installments ? parseInt((currentLoan.installments || '0/0').split('/')[1], 10) : 0;
             // Asegura que las cuotas pagas no excedan el total
             const paidInstallments = totalInstallments > 0 ? Math.min(totalInstallments, Math.floor(paidAmount / originalInstallment)) : 0;
@@ -1443,9 +1441,10 @@
             const strokeDashoffset = circleCircumference - (progressPercentage / 100) * circleCircumference;
 
             let historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
+            
             if (currentLoan.history && currentLoan.history.length > 0) {
                 
-                // --- INICIO: CORRECCIÓN FILTRO Y CÁLCULO DE CUOTA ---
+                // --- [INICIO DE LA MODIFICACIÓN LÓGICA DE ETIQUETAS] ---
                 const now = new Date();
                 const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
 
@@ -1458,49 +1457,103 @@
                         const isRecentPending = p.status === 'pending_verification' && paymentTimestamp >= twentyFourHoursAgo;
                         return isApproved || isRecentPending;
                     })
-                    .sort((a, b) => a.date.seconds - b.date.seconds); // Ordena cronológicamente
+                    .sort((a, b) => a.date.seconds - b.date.seconds); // Ordena cronológicamente (más antiguo primero)
 
                 // 2. Mapea los pagos filtrados calculando el número de cuota CORRECTAMENTE
                 let approvedCumulativePaidForNumbering = 0; // Contador SOLO para pagos aprobados
+                
                 const paymentDetails = filteredHistory.map(p => {
-                    
+                    const paymentAmount = p.amount || 0;
+                    let title = '';
+                    let description = '';
+
                     // Calcula el número de cuota basado SÓLO en los aprobados ANTERIORES
-                    const installmentNumberStart = (originalInstallment > 0) 
+                    // Esta es la cuota que se está empezando a pagar
+                    const startInstallmentNum = (originalInstallment > 0) 
                         ? Math.floor(approvedCumulativePaidForNumbering / originalInstallment) + 1 
                         : 1; 
 
-                    let title = '';
-                    let description = '';
-                    const numInstallmentsCovered = (originalInstallment > 0 && p.amount) ? p.amount / originalInstallment : 0;
-                    const fullInstallments = Math.floor(numInstallmentsCovered);
-                    const partialPercent = Math.round((numInstallmentsCovered - fullInstallments) * 100);
+                    // Calcula el saldo restante de la cuota actual (antes de este pago)
+                    // Ej: Acumulado 420. Saldo (420 % 100) = 20. Restante (100 - 20) = 80.
+                    const remainingInCurrentInstallment = (originalInstallment > 0)
+                        ? originalInstallment - (approvedCumulativePaidForNumbering % originalInstallment)
+                        : 0;
+                    
+                    // Si el acumulado es múltiplo de 100 (ej: 300), el restante es 100.
+                    const installmentBalanceBeforePayment = (remainingInCurrentInstallment === 0 && approvedCumulativePaidForNumbering > 0 && originalInstallment > 0) 
+                        ? originalInstallment 
+                        : remainingInCurrentInstallment;
 
-                    // Lógica para título/descripción (SIN CAMBIOS, usa el installmentNumberStart correcto)
-                    if (numInstallmentsCovered < 0.99) {
-                        title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
-                        description = translations[currentLang].partialPaymentDesc.replace('{percent}', (numInstallmentsCovered * 100).toFixed(0));
-                    } else if (numInstallmentsCovered >= 0.99 && numInstallmentsCovered < 1.01) {
-                         title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', installmentNumberStart);
-                        description = translations[currentLang].fullPaymentDesc.replace('{installment}', installmentNumberStart);
-                    } else {
-                        const endInstallment = installmentNumberStart + fullInstallments - 1;
-                        title = translations[currentLang].paymentInstallmentsTitle
-                            .replace('{start}', installmentNumberStart)
-                            .replace('{end}', endInstallment > installmentNumberStart ? endInstallment : '');
+                    // --- Lógica de Título y Descripción (REESCRITA) ---
+                    
+                    // Solo calcula etiquetas para pagos aprobados
+                    if (p.status === 'approved' || (!p.status && p.date)) {
                         
-                         if (partialPercent > 1) {
-                            description = translations[currentLang].multiplePaymentDesc
-                                .replace('{count}', fullInstallments)
+                        // Calcula el acumulado *después* de este pago
+                        const cumulativeAfterPayment = approvedCumulativePaidForNumbering + paymentAmount;
+                        
+                        // Cuota final que este pago toca
+                        // Ej: (420 + 120) = 540. (540 - 0.01) / 100 = 5.39 -> floor(5.39) + 1 = 6.
+                        const endInstallmentNum = (originalInstallment > 0)
+                            ? Math.floor((cumulativeAfterPayment - 0.01) / originalInstallment) + 1
+                            : 1;
+
+                        // Calcula el nuevo saldo para la próxima cuota
+                        // Ej: 540 % 100 = 40.
+                        const partialPercentRaw = (originalInstallment > 0)
+                            ? cumulativeAfterPayment % originalInstallment
+                            : 0;
+                        // Redondea (ej: 39.999 se vuelve 40)
+                        const partialPercent = Math.round(partialPercentRaw);
+                        
+                        // Caso 1: Pago no cruza a una nueva cuota (Pago Parcial)
+                        // Ej: Acum=200, Pago=50 -> start=3, end=3.
+                        if (startInstallmentNum === endInstallmentNum) {
+                            title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', startInstallmentNum);
+                            description = translations[currentLang].partialPaymentDesc.replace('{percent}', partialPercent);
+                        
+                        // Caso 2: Pago completa exactamente una o más cuotas (sin saldo)
+                        // Ej: Acum=250, Pago=50 -> start=3, end=3. partialPercent=0.
+                        // Ej: Acum=300, Pago=100 -> start=4, end=4. partialPercent=0.
+                        } else if (startInstallmentNum < endInstallmentNum && partialPercent < 0.01) {
+                            const fullInstallmentsCovered = endInstallmentNum - startInstallmentNum;
+                            if (fullInstallmentsCovered === 1) {
+                                title = translations[currentLang].paymentInstallmentTitle.replace('{installment}', startInstallmentNum);
+                                description = translations[currentLang].fullPaymentDesc.replace('{installment}', startInstallmentNum);
+                            } else {
+                                title = translations[currentLang].paymentInstallmentsTitle
+                                    .replace('{start}', startInstallmentNum)
+                                    .replace('{end}', endInstallmentNum - 1); // -1 porque endInstallmentNum es la *siguiente*
+                                description = translations[currentLang].multipleFullPaymentDesc.replace('{count}', fullInstallmentsCovered);
+                            }
+                        
+                        // Caso 3: Pago cruza a una nueva cuota Y DEJA SALDO
+                        // Ej: Acum=300, Pago=120 -> start=4, end=5. partialPercent=20.
+                        // Ej: Acum=420, Pago=120 -> start=5, end=6. partialPercent=40.
+                        } else if (startInstallmentNum < endInstallmentNum && partialPercent >= 0.01) {
+                             const fullInstallmentsCovered = endInstallmentNum - startInstallmentNum;
+                             title = translations[currentLang].paymentInstallmentsTitle
+                                .replace('{start}', startInstallmentNum)
+                                .replace('{end}', endInstallmentNum); // Muestra la cuota que se está pagando parcialmente
+                             description = translations[currentLang].multiplePaymentDesc
+                                .replace('{count}', fullInstallmentsCovered)
                                 .replace('{percent}', partialPercent);
                         } else {
-                            description = translations[currentLang].multipleFullPaymentDesc.replace('{count}', fullInstallments);
+                            // Fallback (no debería ocurrir)
+                             title = "Pagamento Recebido";
+                             description = "Valor creditado ao saldo.";
                         }
+
+                        // IMPORTANTE: Incrementa el contador SOLO si el pago actual es aprobado
+                        approvedCumulativePaidForNumbering += paymentAmount;
+
+                    } else if (p.status === 'pending_verification') {
+                         // Lógica para PENDIENTES (no afecta el acumulado)
+                         title = "Pagamento Enviado";
+                         description = translations[currentLang].awaitingVerification;
                     }
-                    
-                    // IMPORTANTE: Incrementa el contador SOLO si el pago actual es aprobado
-                    if (p.status === 'approved' || (!p.status && p.date)) {
-                        approvedCumulativePaidForNumbering += (p.amount || 0);
-                    }
+                    // --- [FIN DE LA MODIFICACIÓN LÓGICA DE ETIQUETAS] ---
+
 
                     // Objeto de retorno (SIN CAMBIOS)
                     return {
@@ -1538,7 +1591,6 @@
                     // Si después de filtrar no queda nada, muestra el mensaje
                     historyHtml = `<p class="no-history" data-lang-key="noPayments">${translations[currentLang].noPayments}</p>`;
                 }
-                // --- FIN: CORRECCIÓN FILTRO Y CÁLCULO DE CUOTA ---
             }
             
                        
@@ -2858,11 +2910,15 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         // Reativa o botão em caso de erro
         loginBtn.disabled = false;
         loginBtn.innerHTML = originalBtnHTML;
-        applyLanguage(currentLang); // Reapplica idioma ao botão
-
+        
+        // --- [CORRECCIÓN] ---
+        // A linha abaixo estava causando o bug e foi removida.
+        // applyLanguage(currentLang); 
+        // --- [FIM DA CORREÇÃO] ---
     }
     // Não há 'finally' aqui, o botão só reativa no erro.
 }
+
 
         
         function init() {
@@ -3038,4 +3094,5 @@ init();
     </script>
 </body>
 </html>
+
 
