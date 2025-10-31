@@ -955,78 +955,138 @@
 
         async function sendNotificationTicket(title, body, type, icon) {
             const LOG_PREFIX = `[CLIENTE-APP]`;
-            try {
-            // [INICIO CORRECCIÓN DE RUTA]
-            // Usa la ruta multi-tenant correcta
-            const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); 
-            // [FIN CORRECCIÓN DE RUTA]
-
-            // 1. Añade a la lista interna de notificaciones de la app
+            console.log(`${LOG_PREFIX} -> Preparando ticket/notificación...`);
+            
+            // --- [CAMBIO CLAVE] ---
+            // 1. Prepara el objeto de notificación interna, PERO NO LO GUARDA.
+            // Usamos new Date() para que la hora sea consistente con la del timestamp del préstamo.
             const internalNotif = {
-                title: title, body: body, icon: icon, read: false, timestamp: new Date(), id: `${type}_${Date.now()}`
+                title: title, 
+                body: body, 
+                icon: icon, 
+                read: false, 
+                timestamp: new Date(),
+                id: `${type}_${Date.now()}`
             };
-            await updateDoc(clientRef, { // <-- Ahora usa la referencia correcta
-                notifications: arrayUnion(internalNotif),
-                lastLateNotificationTimestamp: serverTimestamp() 
-            });
-            console.log(`${LOG_PREFIX} -> sendNotificationTicket: Notificación INTERNA guardada en el historial del cliente.`);
 
-            // 2. Crea el ticket para la notificación PUSH
-            // [INICIO CORRECCIÓN DE RUTA]
-            // Usa la ruta multi-tenant correcta para la subcolección
-            const ticketsCollectionRef = collection(db, 'companies', currentCompanyId, 'clients', currentClientId, 'pushNotificationTickets'); 
-            // [FIN CORRECCIÓN DE RUTA]
-            await addDoc(ticketsCollectionRef, { // <-- Ahora usa la referencia correcta
-                title: title, body: body, type: type
-            });
+            try {
+                // 2. Crea el ticket para la notificación PUSH (Esto se mantiene)
+                // (La Cloud Function se encargará de procesar esto para el push)
+                const ticketsCollectionRef = collection(db, 'companies', currentCompanyId, 'clients', currentClientId, 'pushNotificationTickets'); 
+                await addDoc(ticketsCollectionRef, { 
+                    title: title, body: body, type: type
+                });
+                console.log(`${LOG_PREFIX} -> sendNotificationTicket: ¡ÉXITO! Ticket PUSH creado en Firestore.`);
 
-            console.log(`${LOG_PREFIX} -> sendNotificationTicket: ¡ÉXITO! Ticket PUSH creado en Firestore.`);
-        } catch (error) {
-                console.error(`${LOG_PREFIX} -> sendNotificationTicket: ERROR FATAL al crear notificación/ticket.`, error);
+                // 3. DEVUELVE el objeto de notificación interna
+                return internalNotif; 
+
+            } catch (error) {
+                console.error(`${LOG_PREFIX} -> sendNotificationTicket: ERROR FATAL al crear ticket PUSH.`, error);
+                return null; // Devuelve null si falla la creación del ticket
             }
         }
 
         async function checkAndSendLatePaymentNotifications() {
             const LOG_PREFIX = `[CLIENTE-APP]`;
-            if (!currentClient || !currentClient.loans || currentClient.loans.length === 0) return;
+            if (!currentClient || !currentClient.loans || currentClient.loans.length === 0 || !currentCompanyId || !currentClientId) return;
 
-            const currentLoan = currentClient.loans[selectedLoanIndex];
-            if (!currentLoan) return;
-
-            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de pagos atrasados...`);
-
-            const lateInstallments = calculateLatePaymentDays(currentLoan);
-            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Días de atraso calculados: ${lateInstallments}`);
-            
-            if (lateInstallments <= 0) {
-                console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: No hay atrasos. Verificación finalizada.`);
-                return;
-            }
+            // console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de atrasos para TODOS los préstamos...`);
 
             const now = new Date();
-            const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
-            const lastNotificationTimestamp = currentClient.lastLateNotificationTimestamp?.toDate();
+            const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+            
+            let updatesNeeded = false; // Flag para saber si necesitamos actualizar Firestore
+            // Hacemos una copia profunda de los préstamos actuales para modificarla
+            let updatedLoans = JSON.parse(JSON.stringify(currentClient.loans)); 
+            let newInternalNotifications = []; // Acumulador para las nuevas notificaciones
 
-            if (lastNotificationTimestamp && lastNotificationTimestamp > twelveHoursAgo) {
-                console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Notificación de atraso suprimida, enviada recientemente (hace menos de 12h).`);
-                return;
+            // Iterar por CADA préstamo que tenga el cliente
+            for (let i = 0; i < updatedLoans.length; i++) {
+                const loan = updatedLoans[i];
+                
+                // 1. Calcular el estado REAL del préstamo
+                const details = calculateLoanDetails(loan); // Usamos la función robusta
+                const lateInstallments = details.lateDays; // Obtenemos los días de atraso
+                
+                // Si no está 'late' (puede ser 'pending', 'paid', 'finished'), no hacemos nada
+                if (details.status !== 'late') {
+                    // console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: OK (Estado: ${details.status}).`);
+                    continue; // Vamos al siguiente préstamo
+                }
+
+                // 2. El préstamo ESTÁ ATRASADO. Verificar cuándo fue la última notificación.
+                console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: ¡ATRASADO! Días: ${lateInstallments}`);
+                
+                // Usamos un timestamp guardado EN EL PRÉSTAMO
+                const lastNotificationTimestamp = loan.lastLateNotificationTimestamp?.toDate(); 
+                
+                // 3. Definir la frecuencia requerida
+                let requiredIntervalHours;
+                if (lateInstallments === 1) {
+                    // 1 día de atraso: 1 vez al día (aprox 22 horas para dar margen)
+                    requiredIntervalHours = 22; 
+                } else {
+                    // 2+ días de atraso: 2 veces al día (aprox 12 horas)
+                    requiredIntervalHours = 12;
+                }
+
+                const hoursAgo = new Date(now.getTime() - (requiredIntervalHours * 60 * 60 * 1000));
+
+                // 4. Decidir si enviar
+                if (lastNotificationTimestamp && lastNotificationTimestamp > hoursAgo) {
+                    console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Notificación suprimida (enviada hace menos de ${requiredIntervalHours}h).`);
+                    continue; // Ya se notificó, vamos al siguiente préstamo
+                }
+
+                // 5. Es necesario enviar. Preparar el mensaje.
+                console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Enviando notificación (Atraso: ${lateInstallments} días).`);
+                
+                let title, body, type, icon;
+                // Identificador "Préstamo 1", "Préstamo 2", etc.
+                const loanIdentifier = `${translations[currentLang].loanLabel} ${i + 1}`; 
+
+                if (lateInstallments === 1) {
+                    title = `${translations[currentLang].latePaymentReminderTitle} (${loanIdentifier})`;
+                    body = translations[currentLang].latePaymentReminderBody;
+                    type = 'late_reminder';
+                    icon = 'alarm-clock';
+                } else { 
+                    // Mensaje creativo (como pediste)
+                    title = `${translations[currentLang].urgentWarningTitle} (${loanIdentifier})`;
+                    body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments) + " " + translations[currentLang].reputationInfo; 
+                    type = 'urgent_warning';
+                    icon = 'alert-triangle';
+                }
+
+                // 6. CREAR el ticket PUSH y OBTENER el objeto de notificación interna
+                const newNotifObject = await sendNotificationTicket(title, body, type, icon);
+
+                if (newNotifObject) {
+                    // 7. ACUMULAR la notificación interna
+                    newInternalNotifications.push(newNotifObject);
+                    // y ACTUALIZAR el timestamp del préstamo (en nuestra copia local)
+                    loan.lastLateNotificationTimestamp = new Date(); 
+                    updatesNeeded = true;
+                }
             }
-            console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Es necesario enviar notificación. Preparando datos...`);
 
-            let title, body, type, icon;
-            if (lateInstallments === 1) {
-                title = translations[currentLang].latePaymentReminderTitle;
-                body = translations[currentLang].latePaymentReminderBody;
-                type = 'late_reminder';
-                icon = 'alarm-clock';
-            } else { 
-                title = translations[currentLang].urgentWarningTitle;
-                body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments);
-                type = 'urgent_warning';
-                icon = 'alert-triangle';
+            // 8. Si hicimos algún cambio, actualizamos Firestore UNA VEZ.
+            if (updatesNeeded) {
+                console.log(`${LOG_PREFIX} -> Actualizando Firestore con ${newInternalNotifications.length} nuevas notificaciones y timestamps...`);
+                
+                // Obtenemos las notificaciones antiguas (de la copia de currentClient)
+                const oldNotifications = currentClient.notifications || [];
+                
+                // Actualizamos el documento del cliente con los préstamos modificados Y las nuevas notificaciones
+                await updateDoc(clientRef, { 
+                    loans: updatedLoans, // El array de préstamos con los nuevos timestamps
+                    notifications: [...oldNotifications, ...newInternalNotifications] // Añadimos las nuevas notificaciones
+                }); 
+                console.log(`${LOG_PREFIX} -> Firestore actualizado.`);
+            } else {
+                // console.log(`${LOG_PREFIX} -> Verificación de atrasos finalizada. Sin notificaciones nuevas para enviar.`);
             }
-
-            await sendNotificationTicket(title, body, type, icon);
         }
 
         function applyLanguage(lang) {
@@ -2430,9 +2490,13 @@ function showCropperModal(file) {
                 const langToggle = document.getElementById('lang-toggle');
                 const langDropdown = document.getElementById('lang-dropdown');
                 if (langToggle && target.closest('#lang-toggle')) {
+                    e.stopPropagation(); // Evita que el listener de appContainer cierre el dropdown
                     langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
                 } else if(langDropdown) {
-                    langDropdown.style.display = 'none';
+                    // Cierra el dropdown si se hace clic fuera de él
+                    if (!target.closest('#lang-dropdown')) {
+                        langDropdown.style.display = 'none';
+                    }
                 }
                 
                 const langButton = target.closest('[data-lang]');
@@ -2484,20 +2548,26 @@ function showCropperModal(file) {
                     copyToClipboard(copyButton.dataset.copy, translations[currentLang].copied);
                 }
                 
+                // --- [INICIO DE LA CORRECCIÓN] ---
+                // Se elimina el listener de '#submit-receipt-btn' de esta función global.
+                // La función 'updatePayView' (a través de 'setupPaymentFormListeners')
+                // es ahora la única responsable de manejar el clic de envío.
+                /*
                 if(target.closest('#submit-receipt-btn')) {
                     handleReceiptSubmission(target.closest('#submit-receipt-btn'));
                 }
+                */
+                // --- [FIN DE LA CORRECCIÓN] ---
 
                 const notifItem = target.closest('.notification-item.unread');
                 if (notifItem && notifItem.dataset.id) {
-                    const notifId = notifItem.dataset.id;
                 if (currentClient && currentClientId && currentCompanyId) { // Adiciona verificação de IDs
                     // --- INÍCIO TAREFA CL3 (Notif Lida) ---
                     const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); // <-- ROTA NOVA
                     // --- FIM TAREFA CL3 ---
                     const updatedNotifications = (currentClient.notifications || []).map((n, index) => { // Garante que notifications existe
                         const currentNotifId = n.id || `notif_${index}`;
-                        if (currentNotifId === notifId) {
+                        if (currentNotifId === notifItem.dataset.id) {
                             return { ...n, read: true };
                         }
                         return n;
@@ -2512,6 +2582,12 @@ function showCropperModal(file) {
                 if (e.target.id === 'profile-pic-input' && e.target.files && e.target.files[0]) {
                     showCropperModal(e.target.files[0]);
                 }
+                // --- [INICIO DE LA CORRECCIÓN] ---
+                // Esta escucha también es redundante y puede causar problemas
+                // si 'updatePayView' no se ha ejecutado.
+                // La escucha de 'receipt-file-input' también se maneja
+                // dentro de 'setupPaymentFormListeners' en 'updatePayView'.
+                /*
                 if (e.target.id === 'receipt-file-input' && e.target.files && e.target.files[0]) {
                     receiptFile = e.target.files[0];
                     const preview = document.getElementById('receipt-preview');
@@ -2521,6 +2597,8 @@ function showCropperModal(file) {
                     uploadLabel.style.display = 'none';
                     document.getElementById('submit-receipt-btn').disabled = false;
                 }
+                */
+                // --- [FIN DE LA CORRECCIÓN] ---
             });
         }
         
@@ -2960,3 +3038,4 @@ init();
     </script>
 </body>
 </html>
+
