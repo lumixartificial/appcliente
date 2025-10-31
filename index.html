@@ -776,7 +776,7 @@
                 navNotifications: 'Notificaciones',
                 notificationsTitle: 'Notificaciones',
                 clearNotifications: 'Limpiar todo',
-                notificationsCleared: 'Notificaciones limpiadas.',
+                notificationsCleared: 'Notificações limpiadas.',
                 notificationRead: 'Notificación marcada como leída.',
                 noNotifications: 'No hay notificaciones nuevas.',
                 awaitingVerification: 'Esperando verificación',
@@ -805,7 +805,7 @@
                 multipleFullPaymentDesc: 'Cubre {count} cuota(s) completamente.',
                 loanFinished: '¡Tu préstamo ya ha sido pagado en su totalidad!',
                 loanLabel: 'Préstamo',
-                paymentOptions: 'Opciones de Pago',
+                paymentOptions: 'Opciones de Pagamento',
                 copyKey: 'Copiar Clave',
                 noPaymentMethodsConfigured: 'Ningún método de pago configurado por tu cobrador.'
             },
@@ -888,7 +888,7 @@
                 multipleFullPaymentDesc: 'Covers {count} installment(s) completely.',
                 loanFinished: 'Your loan is already fully paid!',
                 loanLabel: 'Loan',
-                paymentOptions: 'Opciones de Pago',
+                paymentOptions: 'Opciones de Pagamento',
                 copyKey: 'Copiar Clave',
                 noPaymentMethodsConfigured: 'No payment methods have been configured by your collector.'
             }
@@ -1563,68 +1563,183 @@
             const payViewContainer = document.getElementById('pay-view');
             if (!payViewContainer) return;
 
+            // --- Función interna para renderizar el formulario de pago ---
+            // Esto se llamará después de seleccionar un préstamo o si solo hay uno.
+            const renderAndSetupPaymentForm = (loanIndex) => {
+                if (!collectorSettings || !collectorSettings.paymentSettings) {
+                    console.warn("[CLIENTE-APP] renderAndSetupPaymentForm: No se encontraron collectorSettings.paymentSettings.");
+                    return `<p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
+                }
+
+                const settings = collectorSettings.paymentSettings;
+                const activeMethods = Object.keys(settings.methods || {}).filter(id => settings.methods[id].active && settings.methods[id].data);
+
+                let methodsHtml = `<h2 class="section-title" data-lang-key="paymentOptions"></h2>`;
+
+                if (activeMethods.length === 0) {
+                    methodsHtml += `<p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
+                } else {
+                    methodsHtml += activeMethods.map(id => {
+                        const methodConfig = PAYMENT_CONFIGS[settings.currency]?.methods.find(m => m.id === id);
+                        const methodData = settings.methods[id].data;
+                        if (!methodConfig) return '';
+
+                        if (methodConfig.type === 'image') {
+                            return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                        <h3 class="kpi-title">${methodConfig.label}</h3>
+                                        <img src="${methodData}" alt="${methodConfig.label}" style="max-width: 200px; margin: 10px auto; display: block; border-radius: 8px;">
+                                    </div>`;
+                        } else if (methodConfig.type === 'textarea') {
+                            return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                        <h3 class="kpi-title">${methodConfig.label}</h3>
+                                        <textarea class="form-control" rows="4" readonly style="background-color: var(--border-color);">${methodData}</textarea>
+                                        <button class="btn-primary copy-btn" data-copy="${methodData}" style="width:100%; margin-top:10px;"><i data-lucide="copy"></i> <span data-lang-key="copyCode"></span></button>
+                                    </div>`;
+                        } else {
+                            return `<div class="kpi-card" style="margin-bottom: 20px;">
+                                        <h3 class="kpi-title">${methodConfig.label}</h3>
+                                        <div style="display:flex; gap:10px; align-items:center;">
+                                            <strong style="background-color: var(--border-color); padding: 10px; border-radius: 8px; flex-grow:1; text-align: center; overflow-wrap: break-word;">${methodData}</strong>
+                                            <button class="btn-primary copy-btn" data-copy="${methodData}" style="flex-shrink:0;"><i data-lucide="copy"></i></button>
+                                        </div>
+                                    </div>`;
+                        }
+                    }).join('');
+                }
+
+                // Formulario de envío de recibo
+                methodsHtml += `
+                    <div class="kpi-card" style="margin-top: 30px;">
+                        <h3 class="section-title" data-lang-key="uploadReceipt"></h3>
+                        <p style="font-size: 0.9em; color: var(--text-secondary); margin-top: -10px; margin-bottom: 15px;">Para el Préstamo ${loanIndex + 1}</p>
+                        <div class="form-group">
+                            <label for="receipt-amount" data-lang-key="paymentAmountLabel"></label>
+                            <input type="number" id="receipt-amount" step="0.01" placeholder="0.00" class="form-control">
+                        </div>
+                        <label for="receipt-file-input" class="upload-receipt-btn">
+                            <i data-lucide="upload-cloud"></i>
+                            <span id="upload-label-text">Clique para anexar</span>
+                            <img id="receipt-preview" style="display:none;">
+                        </label>
+                        <input type="file" id="receipt-file-input" accept="image/*" style="display:none;">
+                        
+                        <!-- ESTE BOTÓN AHORA LLEVA EL ÍNDICE DEL PRÉSTAMO -->
+                        <button class="btn-primary" id="submit-receipt-btn" data-loan-index="${loanIndex}" style="width:100%; margin-top:15px;" disabled>
+                            <i data-lucide="send"></i> <span data-lang-key="submitForVerification"></span>
+                        </button>
+                    </div>`;
+                
+                return methodsHtml; // Devuelve el HTML del formulario
+            };
+
+            // --- Función interna para configurar los listeners del formulario ---
+            const setupPaymentFormListeners = (container) => {
+                container.querySelectorAll('.copy-btn').forEach(btn => {
+                    btn.addEventListener('click', () => copyToClipboard(btn.dataset.copy, translations[currentLang].copied));
+                });
+                
+                const fileInput = container.querySelector('#receipt-file-input');
+                const submitBtn = container.querySelector('#submit-receipt-btn');
+                
+                if (fileInput) {
+                    fileInput.addEventListener('change', e => {
+                        if (e.target.files && e.target.files[0]) {
+                            receiptFile = e.target.files[0];
+                            const preview = container.querySelector('#receipt-preview');
+                            const uploadLabel = container.querySelector('#upload-label-text');
+                            preview.src = URL.createObjectURL(receiptFile);
+                            preview.style.display = 'block';
+                            uploadLabel.style.display = 'none';
+                            if(submitBtn) submitBtn.disabled = false;
+                        }
+                    });
+                }
+                
+                if (submitBtn) {
+                    submitBtn.addEventListener('click', e => {
+                        handleReceiptSubmission(e.currentTarget); // Pasa el botón (que tiene el data-loan-index)
+                    });
+                }
+            };
+
+            // --- Lógica principal de updatePayView ---
+
             if (!collectorSettings || !collectorSettings.paymentSettings) {
                 payViewContainer.innerHTML = `<h2 class="section-title" data-lang-key="paymentOptions"></h2><p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
                 applyLanguage(currentLang);
                 return;
             }
 
-            const settings = collectorSettings.paymentSettings;
-            const activeMethods = Object.keys(settings.methods || {}).filter(id => settings.methods[id].active && settings.methods[id].data);
+            // 1. Encontrar todos los préstamos activos (no finalizados)
+            const activeLoans = (currentClient.loans || [])
+                .map((loan, index) => ({ ...loan, originalIndex: index })) // Guardar el índice original
+                .filter(loan => {
+                    if (!loan.totalLoan) return false; // Ignorar si no es un préstamo válido
+                    const details = calculateLoanDetails(loan); // Recalcular estado
+                    return details.status !== 'finished';
+                });
 
-            let methodsHtml = `<h2 class="section-title" data-lang-key="paymentOptions"></h2>`;
+            // 2. Decidir qué mostrar
+            if (activeLoans.length === 0) {
+                // Caso 0: No hay préstamos activos
+                payViewContainer.innerHTML = `<h2 class="section-title" data-lang-key="paymentOptions"></h2><p class="no-history" data-lang-key="loanFinished"></p>`;
+                applyLanguage(currentLang);
 
-            if (activeMethods.length === 0) {
-                methodsHtml += `<p class="no-history" data-lang-key="noPaymentMethodsConfigured"></p>`;
+            } else if (activeLoans.length === 1) {
+                // Caso 1: Solo un préstamo activo. Mostrar formulario directamente.
+                const loanIndex = activeLoans[0].originalIndex;
+                payViewContainer.innerHTML = renderAndSetupPaymentForm(loanIndex);
+                setupPaymentFormListeners(payViewContainer); // Configurar listeners para el contenedor principal
+                applyLanguage(currentLang);
+                lucide.createIcons({nodes: payViewContainer.querySelectorAll('[data-lucide]')});
+
             } else {
-                methodsHtml += activeMethods.map(id => {
-                    const methodConfig = PAYMENT_CONFIGS[settings.currency]?.methods.find(m => m.id === id);
-                    const methodData = settings.methods[id].data;
-                    
-                    if (!methodConfig) return '';
-
-                    if (methodConfig.type === 'image') {
-                        return `<div class="kpi-card" style="margin-bottom: 20px;">
-                                    <h3 class="kpi-title">${methodConfig.label}</h3>
-                                    <img src="${methodData}" alt="${methodConfig.label}" style="max-width: 200px; margin: 10px auto; display: block; border-radius: 8px;">
-                                </div>`;
-                    } else if (methodConfig.type === 'textarea') {
-                         return `<div class="kpi-card" style="margin-bottom: 20px;">
-                                     <h3 class="kpi-title">${methodConfig.label}</h3>
-                                     <textarea class="form-control" rows="4" readonly style="background-color: var(--border-color);">${methodData}</textarea>
-                                     <button class="btn-primary copy-btn" data-copy="${methodData}" style="width:100%; margin-top:10px;"><i data-lucide="copy"></i> <span data-lang-key="copyCode"></span></button>
-                                </div>`;
-                    } else { // text, tel, email
-                        return `<div class="kpi-card" style="margin-bottom: 20px;">
-                                     <h3 class="kpi-title">${methodConfig.label}</h3>
-                                     <div style="display:flex; gap:10px; align-items:center;">
-                                         <strong style="background-color: var(--border-color); padding: 10px; border-radius: 8px; flex-grow:1; text-align: center; overflow-wrap: break-word;">${methodData}</strong>
-                                         <button class="btn-primary copy-btn" data-copy="${methodData}" style="flex-shrink:0;"><i data-lucide="copy"></i></button>
-                                     </div>
-                                </div>`;
-                    }
-                }).join('');
-            }
-            
-            methodsHtml += `
-                 <div class="kpi-card" style="margin-top: 30px;">
-                    <h3 class="section-title" data-lang-key="uploadReceipt"></h3>
-                    <div class="form-group">
-                        <label for="receipt-amount" data-lang-key="paymentAmountLabel"></label>
-                        <input type="number" id="receipt-amount" step="0.01" placeholder="0.00" class="form-control">
+                // Caso 2: Múltiples préstamos activos. Mostrar selector.
+                const selectorHtml = `
+                    <h2 class="section-title" data-lang-key="payInstallment"></h2>
+                    <div class="kpi-card" style="margin-bottom: 20px;">
+                        <h3 class="kpi-title" style="font-size: 1.1em; color: var(--text-primary);">Seleccione el préstamo a pagar</h3>
+                        <div id="loan-payment-selector">
+                            ${activeLoans.map(loan => {
+                                const remaining = Math.max(0, loan.totalLoan - (loan.paid || 0));
+                                return `
+                                <label style="display:flex; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; align-items: center; gap: 10px; cursor: pointer;">
+                                    <input type="radio" name="paymentLoan" value="${loan.originalIndex}" style="width: 20px; height: 20px; flex-shrink: 0;">
+                                    <div>
+                                        <strong style="font-size: 1.1em;">${translations[currentLang].loanLabel} ${loan.originalIndex + 1}</strong>
+                                        <div style="font-size: 0.9em; color: var(--text-secondary);">
+                                            Restante: ${money(remaining)} | Cuota: ${money(loan.originalInstallmentAmount)}
+                                        </div>
+                                    </div>
+                                </label>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
-                     <label for="receipt-file-input" class="upload-receipt-btn">
-                         <i data-lucide="upload-cloud"></i>
-                         <span id="upload-label-text">Clique para anexar</span>
-                         <img id="receipt-preview" style="display:none;">
-                     </label>
-                     <input type="file" id="receipt-file-input" accept="image/*" style="display:none;">
-                     <button class="btn-primary" id="submit-receipt-btn" style="width:100%; margin-top:15px;" disabled><i data-lucide="send"></i> <span data-lang-key="submitForVerification"></span></button>
-                 </div>`;
-            
-            payViewContainer.innerHTML = methodsHtml;
-            applyLanguage(currentLang);
-            lucide.createIcons({nodes: payViewContainer.querySelectorAll('[data-lucide]')});
+                    <div id="payment-form-container" style="display: none; opacity: 0; transition: opacity 0.3s ease-in-out;">
+                        <!-- El formulario de pago se inyectará aquí -->
+                    </div>
+                `;
+                payViewContainer.innerHTML = selectorHtml;
+                applyLanguage(currentLang);
+
+                // Añadir listener para los botones de radio
+                const selector = payViewContainer.querySelector('#loan-payment-selector');
+                selector.addEventListener('change', (e) => {
+                    const selectedLoanIndex = parseInt(e.target.value, 10);
+                    if (!isNaN(selectedLoanIndex)) {
+                        const formContainer = payViewContainer.querySelector('#payment-form-container');
+                        formContainer.innerHTML = renderAndSetupPaymentForm(selectedLoanIndex);
+                        setupPaymentFormListeners(formContainer); // Configurar listeners para el contenedor del formulario
+                        
+                        formContainer.style.display = 'block';
+                        setTimeout(() => { formContainer.style.opacity = 1; }, 10); // Fade in
+                        
+                        applyLanguage(currentLang);
+                        lucide.createIcons({nodes: formContainer.querySelectorAll('[data-lucide]')});
+                    }
+                });
+            }
         }
 
         
@@ -1798,7 +1913,7 @@
     console.log(`${LOG_PREFIX} --- Iniciando setupFCM ---`);
     try {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-            console.error(`${LOG_PREFIX} ERROR: Notificaciones Push no son soportadas en este navegador.`);
+            console.error(`${LOG_PREFIX} ERROR: Notificações Push no son soportadas en este navegador.`);
             return;
         }
         console.log(`${LOG_PREFIX} El navegador soporta notificaciones.`);
@@ -2443,7 +2558,7 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         };
         console.log(`[CLIENTE->COBRADOR] Enviando notificación INTERNA a: collectors/${currentCollectorId}/notifications`);
         await addDoc(notificationsCollectionRef, notificationData);
-        console.log(`[CLIENTE->COBRADOR] Notificación INTERNA enviada con índices (L:${loanIndex}, H:${historyIndex}).`);
+        console.log(`[CLIENTE->COBRADOR] Notificación INTERNA enviada com índices (L:${loanIndex}, H:${historyIndex}).`);
 
         // 2. [LÓGICA PUSH AÑADIDA] Ticket PUSH para el COBRADOR
         //    (Esta parte ya estaba correcta, pero la mantenemos)
@@ -2477,127 +2592,141 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         
     // BLOQUE 2/2 PARA PEGAR EN: app_cliente.html
 
-async function handleReceiptSubmission(button) {
-    // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
-    if (!receiptFile || !currentClient || !currentClientId || !currentCompanyId) {
-        console.warn("[CLIENTE-APP] Faltan datos (IDs o archivo) para enviar recibo.");
-        showToast(translations[currentLang].uploadError, true); // Mensaje genérico si faltan datos
-        return;
-    }
+    async function handleReceiptSubmission(button) {
+            // Verifica si tenemos los datos necesarios (IDs globales) y el archivo seleccionado
+            if (!receiptFile || !currentClient || !currentClientId || !currentCompanyId) {
+                console.warn("[CLIENTE-APP] Faltan datos (IDs o archivo) para enviar recibo.");
+                showToast(translations[currentLang].uploadError, true); // Mensaje genérico si faltan datos
+                return;
+            }
+        
+            const amountInput = document.getElementById('receipt-amount');
+            const amount = parseFloat(amountInput.value);
+        
+            // Validación del monto ingresado
+            if (isNaN(amount) || amount <= 0) {
+                 showToast(translations[currentLang].invalidAmount, true);
+                 // Estilo visual de error para el input
+                 if(amountInput) amountInput.style.borderColor = 'var(--danger-color)';
+                 setTimeout(() => { if(amountInput) amountInput.style.borderColor = ''; }, 2500);
+                 return;
+            }
+        
+            // Deshabilita el botón y muestra un indicador de carga
+            const originalButtonHTML = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+            lucide.createIcons({nodes: [button.querySelector('i')]}); // Asegúrate de crear el icono
+        
+            let receiptUrl = ''; // Variable para guardar la URL del archivo subido
+        
+            // --- Bloque TRY/CATCH para el UPLOAD al Firebase Storage (SIN CAMBIOS) ---
+            try {
+                const uniqueFileName = `receipt_${Date.now()}_${receiptFile.name.replace(/\s+/g, '_')}`;
+                const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/receipts/${uniqueFileName}`);
+                console.log(`[CLIENTE-APP] Subiendo recibo para: ${storageRef.fullPath}`);
+                showToast('Enviando comprovante...', false);
+                await uploadBytes(storageRef, receiptFile);
+                receiptUrl = await getDownloadURL(storageRef);
+                console.log(`[CLIENTE-APP] Recibo subido com sucesso. URL: ${receiptUrl}`);
+            } catch (storageError) {
+                console.error("[CLIENTE-APP] Erro ao subir recibo para Firebase Storage:", storageError);
+                let errorMsg = translations[currentLang].uploadError;
+                if (storageError.code === 'storage/unauthorized') { errorMsg = "Erro de permissão ao enviar."; }
+                showToast(errorMsg, true);
+                button.disabled = false;
+                button.innerHTML = originalButtonHTML;
+                const icon = button.querySelector('[data-lucide]');
+                if(icon) lucide.createIcons({nodes: [icon]});
+                return;
+            }
+            // --- Fin del Bloque TRY/CATCH del Upload ---
+        
+            // --- Bloque TRY/CATCH para GUARDAR la URL y datos en Firestore ---
+            try {
+                // --- [INICIO DE LA MODIFICACIÓN] ---
+                // Obtener el loanIndex del botón en lugar de la variable global
+                const loanIndexToPay = parseInt(button.dataset.loanIndex, 10);
+                
+                if (isNaN(loanIndexToPay)) {
+                    console.error("[CLIENTE-APP] ¡Error fatal! loanIndex no se encontró en el botón de envío.");
+                    showToast("Error de referencia del préstamo. Intente de nuevo.", true);
+                    button.disabled = false;
+                    button.innerHTML = originalButtonHTML;
+                    return; // Salir
+                }
+                console.log(`[CLIENTE-APP] handleReceiptSubmission: Aplicando pago al préstamo índice ${loanIndexToPay}`);
+                // --- [FIN DE LA MODIFICACIÓN] ---
 
-    const amountInput = document.getElementById('receipt-amount');
-    const amount = parseFloat(amountInput.value);
-
-    // Validación del monto ingresado
-    if (isNaN(amount) || amount <= 0) {
-         showToast(translations[currentLang].invalidAmount, true);
-         // Estilo visual de error para el input
-         if(amountInput) amountInput.style.borderColor = 'var(--danger-color)';
-         setTimeout(() => { if(amountInput) amountInput.style.borderColor = ''; }, 2500);
-         return;
-    }
-
-    // Deshabilita el botón y muestra un indicador de carga
-    const originalButtonHTML = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
-    lucide.createIcons({nodes: [button.querySelector('i')]}); // Asegúrate de crear el icono
-
-    let receiptUrl = ''; // Variable para guardar la URL del archivo subido
-
-    // --- Bloque TRY/CATCH para el UPLOAD al Firebase Storage (SIN CAMBIOS) ---
-    try {
-        const uniqueFileName = `receipt_${Date.now()}_${receiptFile.name.replace(/\s+/g, '_')}`;
-        const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/receipts/${uniqueFileName}`);
-        console.log(`[CLIENTE-APP] Subiendo recibo para: ${storageRef.fullPath}`);
-        showToast('Enviando comprovante...', false);
-        await uploadBytes(storageRef, receiptFile);
-        receiptUrl = await getDownloadURL(storageRef);
-        console.log(`[CLIENTE-APP] Recibo subido com sucesso. URL: ${receiptUrl}`);
-    } catch (storageError) {
-        console.error("[CLIENTE-APP] Erro ao subir recibo para Firebase Storage:", storageError);
-        let errorMsg = translations[currentLang].uploadError;
-        if (storageError.code) { /* ... manejo de errores ... */ }
-        showToast(errorMsg, true);
-        button.disabled = false;
-        button.innerHTML = originalButtonHTML;
-        const icon = button.querySelector('[data-lucide]');
-        if(icon) lucide.createIcons({nodes: [icon]});
-        return;
-    }
-    // --- Fin del Bloque TRY/CATCH del Upload ---
-
-    // --- Bloque TRY/CATCH para GUARDAR la URL y datos en Firestore ---
-    try {
-        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
-        const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans || []));
-
-        const newPayment = {
-            amount: amount,
-            date: new Date(),
-            receiptUrl: receiptUrl,
-            status: 'pending_verification',
-            method: 'receipt'
-        };
-
-        if (selectedLoanIndex < 0 || selectedLoanIndex >= updatedLoans.length) {
-            throw new Error("Índice de empréstimo selecionado inválido ao salvar recibo.");
+                const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+                const updatedLoans = JSON.parse(JSON.stringify(currentClient.loans || []));
+        
+                const newPayment = {
+                    amount: amount,
+                    date: new Date(),
+                    receiptUrl: receiptUrl,
+                    status: 'pending_verification',
+                    method: 'receipt'
+                };
+        
+                // --- [INICIO DE LA MODIFICACIÓN] ---
+                // Usar loanIndexToPay en lugar de selectedLoanIndex
+                if (loanIndexToPay < 0 || loanIndexToPay >= updatedLoans.length) {
+                    throw new Error("Índice de préstamo selecionado inválido ao salvar recibo.");
+                }
+                if (!updatedLoans[loanIndexToPay]) updatedLoans[loanIndexToPay] = { history: []};
+                if (!updatedLoans[loanIndexToPay].history) updatedLoans[loanIndexToPay].history = [];
+        
+                const newHistoryIndex = updatedLoans[loanIndexToPay].history.length;
+                updatedLoans[loanIndexToPay].history.push(newPayment);
+                // --- [FIN DE LA MODIFICACIÓN] ---
+        
+                await updateDoc(clientRef, { loans: updatedLoans });
+        
+                showToast(translations[currentLang].receiptSent);
+        
+                // --- [INICIO DE LA MODIFICACIÓN] ---
+                // Pasar los índices correctos a la notificación
+                sendNotificationToCollector(
+                    `${currentClient.name || 'Cliente'}`,
+                    `${translations[currentLang].paymentSent} ${money(amount)}.`,
+                    'payment',
+                    'receipt',
+                    loanIndexToPay,   // <-- Usar el índice del botón
+                    newHistoryIndex   // <-- Usar el índice calculado
+                );
+                // --- [FIN DE LA MODIFICACIÓN] ---
+        
+                // Limpia el formulario
+                receiptFile = null;
+                const fileInput = document.getElementById('receipt-file-input');
+                if(fileInput) fileInput.value = '';
+                const previewImg = document.getElementById('receipt-preview');
+                const uploadLabel = document.getElementById('upload-label-text');
+                if(previewImg) previewImg.style.display = 'none';
+                if(uploadLabel) uploadLabel.style.display = 'block';
+                if(amountInput) amountInput.value = '';
+                button.disabled = true; // Se queda deshabilitado tras el éxito
+                button.innerHTML = originalButtonHTML;
+        
+                // Navega de vuelta a la pantalla principal (home)
+                location.hash = 'home';
+                showView('home');
+        
+            } catch (firestoreError) {
+                 console.error("[CLIENTE-APP] Erro ao salvar dados do recibo no Firestore:", firestoreError);
+                 showToast('Erro ao registrar o comprovante no sistema.', true);
+                 button.disabled = false;
+                 button.innerHTML = originalButtonHTML;
+                 const icon = button.querySelector('[data-lucide]');
+                 if(icon) lucide.createIcons({nodes: [icon]});
+            }
         }
-        if (!updatedLoans[selectedLoanIndex]) updatedLoans[selectedLoanIndex] = { history: []};
-        if (!updatedLoans[selectedLoanIndex].history) updatedLoans[selectedLoanIndex].history = [];
 
-        // --- [CAMBIO CLAVE] ---
-        // 1. Obtenemos el índice DONDE se va a insertar el pago
-        const newHistoryIndex = updatedLoans[selectedLoanIndex].history.length;
-        // 2. Añadimos el pago
-        updatedLoans[selectedLoanIndex].history.push(newPayment);
-        // --- [FIN CAMBIO CLAVE] ---
 
-        await updateDoc(clientRef, { loans: updatedLoans });
 
-        showToast(translations[currentLang].receiptSent);
 
-        // --- [CAMBIO CLAVE] ---
-        // 3. Pasamos los índices a la función de notificación
-        sendNotificationToCollector(
-            `${currentClient.name || 'Cliente'}`,
-            `${translations[currentLang].paymentSent} ${money(amount)}.`,
-            'payment',
-            'receipt',
-            selectedLoanIndex, // <-- Índice del Préstamo
-            newHistoryIndex      // <-- Índice del Historial
-        );
-        // --- [FIN CAMBIO CLAVE] ---
 
-        // (Esta función sendNotificationTicket no es relevante para el cobrador, la ignoramos por ahora)
-        // const notifTitle = ...
-        // sendNotificationTicket(notifTitle, notifBody, 'payment_receipt', 'receipt');
-
-        // Limpia el formulario
-        receiptFile = null;
-        const fileInput = document.getElementById('receipt-file-input');
-        if(fileInput) fileInput.value = '';
-        const previewImg = document.getElementById('receipt-preview');
-        const uploadLabel = document.getElementById('upload-label-text');
-        if(previewImg) previewImg.style.display = 'none';
-        if(uploadLabel) uploadLabel.style.display = 'block';
-        if(amountInput) amountInput.value = '';
-        button.disabled = true;
-        button.innerHTML = originalButtonHTML;
-
-        // Navega de vuelta a la pantalla principal (home)
-        const homeNav = document.querySelector('.nav-item[data-view="home"]');
-        if(homeNav) homeNav.click();
-
-    } catch (firestoreError) {
-         console.error("[CLIENTE-APP] Erro ao salvar dados do recibo no Firestore:", firestoreError);
-         showToast('Erro ao registrar o comprovante no sistema.', true);
-         button.disabled = false;
-         button.innerHTML = originalButtonHTML;
-         const icon = button.querySelector('[data-lucide]');
-         if(icon) lucide.createIcons({nodes: [icon]});
-    }
-}
 
         function loadGlobalSettings(settings) {
             const companyLogo = settings.companyLogo || DEFAULT_LOGO_URL;
