@@ -1416,10 +1416,15 @@
             const currentLoan = currentClient.loans[selectedLoanIndex];
             if (!currentLoan) return;
 
-            // --- INICIO: CÁLCULO DE PROGRESO (Sin cambios) ---
-            const paidAmount = (currentLoan.history || [])
+            const historyPaid = (currentLoan.history || [])
                 .filter(h => h.status === 'approved' || (!h.status && h.date))
                 .reduce((sum, h) => sum + (h.amount || 0), 0);
+
+            // 2. Obtiene el valor inicial migrado
+            const initialPaid = currentLoan.initialMigratedAmount || 0;
+            
+            // 3. El total real es la suma de ambos
+            const paidAmount = initialPaid + historyPaid;
                 
             const totalAmount = currentLoan.totalLoan || 0;
             const remainingAmount = Math.max(0, totalAmount - paidAmount);
@@ -1456,7 +1461,7 @@
                     .sort((a, b) => a.date.seconds - b.date.seconds);
 
                 // 2. Mapea los pagos filtrados (Sin cambios en los cálculos)
-                let approvedCumulativePaidForNumbering = 0; 
+                let approvedCumulativePaidForNumbering = currentLoan.initialMigratedAmount || 0;
                 
                 const paymentDetails = filteredHistory.map(p => {
                     const paymentAmount = p.amount || 0;
