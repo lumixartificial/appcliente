@@ -2222,105 +2222,118 @@ try {
 
 
     // Usamos onSnapshot directamente con el ID del cobrador para escuchar cambios
-    unsubscribeCollector = onSnapshot(doc(db, 'collectors', currentCollectorId), (docSnap) => {
-        if (docSnap.exists()) {
-            collectorSettings = docSnap.data(); // Guarda los datos del cobrador en la variable global 'collectorSettings'
-            console.log("[CLIENTE-APP] Dados do cobrador obtidos/atualizados:", collectorSettings);
+    
+    // [REEMPLAZA EL BLOQUE onSnapshot DEL COBRADOR CON ESTO]
+            unsubscribeCollector = onSnapshot(doc(db, 'collectors', currentCollectorId), (docSnap) => {
+                if (docSnap.exists()) {
+                    collectorSettings = docSnap.data(); // Guarda los datos del cobrador en la variable global 'collectorSettings'
+                    console.log("[CLIENTE-APP] Dados do cobrador obtidos/atualizados:", collectorSettings);
+        
+                    // ... (código existente que estaba aquí, como updatePayView) ...
+                    updatePayView(); // <-- Esta llamada está bien aquí
 
-            // --- CÓDIGO MOVIDO Y CORREGIDO DE DENTRO DEL onSnapshot ANTERIOR ---
-            // (Este código usa 'collectorSettings' para configurar la UI)
+                    // Lógica de primeira carga (FCM) - Executa apenas uma vez após obter os dados iniciais
+                    if (isFirstLoad) {
+                        console.log('[CLIENTE-APP] Carga inicial do cobrador completa. Configurando FCM...');
+                        setupFCM(); // La función setupFCM en cliente.html ya usa las variables globales correctas
+                        
+                        // --- [INICIO DE LA CORRECCIÓN] ---
+                        // 1. Limpia cualquier intervalo anterior (por si acaso)
+                        if (notificationInterval) clearInterval(notificationInterval);
+                        
+                        // 2. Inicia el verificador de notificaciones en un temporizador (cada 60 segundos)
+                        // Esto evita que onSnapshot se llame a sí mismo en un bucle.
+                        console.log("[CLIENTE-APP] Iniciando temporizador de verificação de atrasos (60s).");
+                        
+                        // [CORRECCIÓN 1/3] Ejecuta una vez al inicio
+                        checkAndSendLatePaymentNotifications(); 
+                        
+                        // [CORRECCIÓN 2/3] Y luego lo ejecuta cada 60 segundos
+                        notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 60000); 
+                        // --- [FIN DE LA CORRECCIÓN] ---
 
-            // Por ejemplo, si necesitaras el nombre del cobrador en algún lugar:
-            // const collectorName = collectorSettings.name || 'Seu Cobrador';
-            // document.getElementById('algum-elemento-com-nome-cobrador').textContent = collectorName;
+                        isFirstLoad = false; // Marca que la primera carga foi concluída
+                    }
+        
+                    // --- INÍCIO LISTENERS MOVIDOS PARA DENTRO ---
+                    // (Estes listeners agora começam DEPOIS de sabermos os dados do cobrador)
+        
+                    // Listener de CLIENTE (onSnapshot en el documento del cliente actual)
+                    // Cancela listener anterior si existe
+                    if (unsubscribeClient) unsubscribeClient();
+                    console.log(`[CLIENTE-APP] Iniciando listener para cliente: companies/${currentCompanyId}/clients/${currentClientId}`);
+                    unsubscribeClient = onSnapshot(doc(db, 'companies', currentCompanyId, "clients", currentClientId), (clientSnapshot) => {
+                        
+                        if (!clientSnapshot.exists() || !clientSnapshot.data()) {
+                        console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído, inacessível ou está vazio?`);
+                        showBlockedView("Erro: Seus dados de cliente não puderam ser carregados ou estão corrompidos.");
+                        signOut(auth);
+                        return; // Detiene la ejecución si no hay datos válidos
+                    }
+                    console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
+                    currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() }; // Actualiza datos globales del cliente
+        
+                    // Recalcula el estado de los préstamos solo si existen
+                    // [CORRECCIÓN] Añadida verificación extra por si 'loans' no es un array
+                    
+        
+                    if (currentClient && Array.isArray(currentClient.loans)) {
+                    console.log("[CLIENTE-APP][DIAG-UI] Procesando préstamos..."); // <-- Log añadido
+                    currentClient.loans.forEach(loan => {
+                         if (!loan) return;
+                        try { // <-- Añadir try/catch alrededor del cálculo
+                             const loanDetails = calculateLoanDetails(loan);
+                             loan.status = loanDetails.status;
+                             loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
+                        } catch (calcError) {
+                             console.error(`[CLIENTE-APP][DIAG-UI] ERROR en calculateLoanDetails para un préstamo:`, calcError, loan); // <-- Log de error específico
+                        }
+                    });
+                    console.log("[CLIENTE-APP][DIAG-UI] Préstamos procesados. Llamando a updateAllViews()..."); // <-- Log añadido
+                    try {
+                        updateAllViews(); // <-- Llamada actual envuelta en try/catch
+                        console.log("[CLIENTE-APP][DIAG-UI] ¡updateAllViews() completada com sucesso!"); // <-- Log añadido
+                        
+                        // --- [INICIO DE LA CORRECCIÓN] ---
+                        // 3. ¡ELIMINAR LA LLAMADA DE AQUÍ!
+                        // checkAndSendLatePaymentNotifications(); // <-- [CORRECCIÓN 3/3] LÍNEA ELIMINADA
+                        // --- [FIN DE LA CORRECCIÓN] ---
 
-            // La lógica importante aquí es actualizar la VISTA DE PAGO,
-            // ya que depende de 'collectorSettings.paymentSettings'
-            updatePayView();
-
-            // --- FIN CÓDIGO MOVIDO ---
-
-            // Lógica de primeira carga (FCM) - Executa apenas uma vez após obter os dados iniciais
-            if (isFirstLoad) {
-                console.log('[CLIENTE-APP] Carga inicial do cobrador completa. Configurando FCM...');
-                setupFCM(); // La función setupFCM en cliente.html ya usa las variables globales correctas
-                isFirstLoad = false; // Marca que la primera carga foi concluída
-            }
-
-            // --- INÍCIO LISTENERS MOVIDOS PARA DENTRO ---
-            // (Estes listeners agora começam DEPOIS de sabermos os dados do cobrador)
-
-            // Listener de CLIENTE (onSnapshot en el documento del cliente actual)
-            // Cancela listener anterior si existe
-            if (unsubscribeClient) unsubscribeClient();
-            console.log(`[CLIENTE-APP] Iniciando listener para cliente: companies/${currentCompanyId}/clients/${currentClientId}`);
-            unsubscribeClient = onSnapshot(doc(db, 'companies', currentCompanyId, "clients", currentClientId), (clientSnapshot) => {
-                
-                if (!clientSnapshot.exists() || !clientSnapshot.data()) {
-                console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído, inacessível ou está vazio?`);
-                showBlockedView("Erro: Seus dados de cliente não puderam ser carregados ou estão corrompidos.");
-                signOut(auth);
-                return; // Detiene la ejecución si no hay datos válidos
-            }
-            console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
-            currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() }; // Actualiza datos globales del cliente
-
-            // Recalcula el estado de los préstamos solo si existen
-            // [CORRECCIÓN] Añadida verificación extra por si 'loans' no es un array
-            
-
-            if (currentClient && Array.isArray(currentClient.loans)) {
-            console.log("[CLIENTE-APP][DIAG-UI] Procesando préstamos..."); // <-- Log añadido
-            currentClient.loans.forEach(loan => {
-                 if (!loan) return;
-                try { // <-- Añadir try/catch alrededor del cálculo
-                     const loanDetails = calculateLoanDetails(loan);
-                     loan.status = loanDetails.status;
-                     loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
-                } catch (calcError) {
-                     console.error(`[CLIENTE-APP][DIAG-UI] ERROR en calculateLoanDetails para un préstamo:`, calcError, loan); // <-- Log de error específico
+                    } catch (updateError) {
+                         console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateAllViews():", updateError); // <-- Log de error específico
+                    }
+                } else {
+                     console.warn("[CLIENTE-APP][DIAG-UI] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo y updateAllViews()."); // <-- Log modificado
+                     // Si no hay préstamos, ¿deberíamos actualizar algo? Quizás el perfil.
+                     try {
+                         updateProfileView(); // Intentamos actualizar solo el perfil
+                         console.log("[CLIENTE-APP][DIAG-UI] updateProfileView() llamada (sin préstamos).");
+                     } catch (profileError) {
+                          console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateProfileView() (sin préstamos):", profileError);
+                     }
                 }
+        
+        
+                    }, (error) => {
+                         console.error(`[CLIENTE-APP] Erro ao escutar dados do cliente ${currentClientId}:`, error);
+                         showBlockedView("Erro de conexão ao carregar seus dados.");
+                         signOut(auth);
+                    });
+        
+                    // --- FIN LISTENERS MOVIDOS ---
+        
+        
+                } else {
+                    // Si el documento del cobrador no existe (¡muy raro!)
+                    console.error(`[CLIENTE-APP] Documento do cobrador ${currentCollectorId} não existe!`);
+                    showBlockedView("Erro crítico: Os dados do seu cobrador não foram encontrados.");
+                    signOut(auth);
+                }
+            }, (error) => { // Manejo de erro para onSnapshot do cobrador
+                console.error(`[CLIENTE-APP] Erro ao escutar dados do cobrador ${currentCollectorId}:`, error);
+                showBlockedView("Erro de conexão ao carregar dados do cobrador.");
+                signOut(auth);
             });
-            console.log("[CLIENTE-APP][DIAG-UI] Préstamos procesados. Llamando a updateAllViews()..."); // <-- Log añadido
-            try {
-                updateAllViews(); // <-- Llamada actual envuelta en try/catch
-                console.log("[CLIENTE-APP][DIAG-UI] ¡updateAllViews() completada con éxito!"); // <-- Log añadido
-                checkAndSendLatePaymentNotifications();
-            } catch (updateError) {
-                 console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateAllViews():", updateError); // <-- Log de error específico
-            }
-        } else {
-             console.warn("[CLIENTE-APP][DIAG-UI] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo y updateAllViews()."); // <-- Log modificado
-             // Si no hay préstamos, ¿deberíamos actualizar algo? Quizás el perfil.
-             try {
-                 updateProfileView(); // Intentamos actualizar solo el perfil
-                 console.log("[CLIENTE-APP][DIAG-UI] updateProfileView() llamada (sin préstamos).");
-             } catch (profileError) {
-                  console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateProfileView() (sin préstamos):", profileError);
-             }
-        }
-
-
-            }, (error) => {
-                 console.error(`[CLIENTE-APP] Erro ao escutar dados do cliente ${currentClientId}:`, error);
-                 showBlockedView("Erro de conexão ao carregar seus dados.");
-                 signOut(auth);
-            });
-
-            // --- FIN LISTENERS MOVIDOS ---
-
-
-        } else {
-            // Si el documento del cobrador no existe (¡muy raro!)
-            console.error(`[CLIENTE-APP] Documento do cobrador ${currentCollectorId} não existe!`);
-            showBlockedView("Erro crítico: Os dados do seu cobrador não foram encontrados.");
-            signOut(auth);
-        }
-    }, (error) => { // Manejo de erro para onSnapshot do cobrador
-        console.error(`[CLIENTE-APP] Erro ao escutar dados do cobrador ${currentCollectorId}:`, error);
-        showBlockedView("Erro de conexão ao carregar dados do cobrador.");
-        signOut(auth);
-    });
     
      // Fim do getDocs().catch()
 }
@@ -2968,16 +2981,16 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         if (user) {
             // Usuário logado via Firebase Auth
             try {
-            console.log("[CLIENTE-APP][DIAG] PASO 1: Verificando permissões..."); // <--- AÑADIR LOG
-            const tokenResult = await user.getIdTokenResult(true);
-            // No necesitamos claims aquí para el cliente
+            console.log("[CLIENTE-APP][DIAG] PASO 1: Verificando permissões..."); // <--- LOG 1
+            
+            // const tokenResult = await user.getIdTokenResult(true); // <--- [CORRECCIÓN] LÍNEA ELIMINADA. ESTA LÍNEA CAUSABA EL BUCLE INFINITO.
 
-            console.log("[CLIENTE-APP][DIAG] PASO 2: Permissões OK. Buscando documento do cliente..."); // <--- AÑADIR LOG
+            console.log("[CLIENTE-APP][DIAG] PASO 2: Permissões OK. Buscando documento do cliente..."); // <--- LOG 2
             currentAuthUid = user.uid;
             const clientQuery = query(collectionGroup(db, 'clients'), where('authUid', '==', currentAuthUid));
             const querySnapshot = await getDocs(clientQuery);
 
-            console.log("[CLIENTE-APP][DIAG] PASO 3: Busca CollectionGroup concluída."); // <--- AÑADIR LOG
+            console.log("[CLIENTE-APP][DIAG] PASO 3: Busca CollectionGroup concluída."); // <--- LOG 3
             if (querySnapshot.empty) {
                 console.error("[CLIENTE-APP][DIAG] ERRO no PASO 3.1: Nenhum cliente encontrado."); // <--- AÑADIR LOG
                 throw new Error("Nenhum registro de cliente encontrado para esta conta. Contate o suporte.");
@@ -3091,7 +3104,6 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
             applyLanguage(currentLang); // Aplica idioma na tela de login
         }
     });
-    // --- FIM TAREFA CL0/CL1 ---
 }
 init();
 
@@ -3100,3 +3112,4 @@ init();
     </script>
 </body>
 </html>
+
