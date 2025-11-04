@@ -1018,8 +1018,24 @@
                 // 2. El préstamo ESTÁ ATRASADO. Verificar cuándo fue la última notificación.
                 console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: ¡ATRASADO! Días: ${lateInstallments}`);
                 
-                // Usamos un timestamp guardado EN EL PRÉSTAMO
-                const lastNotificationTimestamp = loan.lastLateNotificationTimestamp?.toDate(); 
+                // [LÍNEA ORIGINAL CON ERROR]
+                // const lastNotificationTimestamp = loan.lastLateNotificationTimestamp?.toDate(); 
+                
+                // --- [INICIO DE LA CORRECCIÓN] ---
+                // 'loan.lastLateNotificationTimestamp' puede ser un string (de JSON.stringify)
+                // o un Timestamp. Necesitamos un objeto Date de JS.
+                let lastNotificationTimestamp = null;
+                if (loan.lastLateNotificationTimestamp) {
+                    if (typeof loan.lastLateNotificationTimestamp.toDate === 'function') {
+                        // Caso 1: Es un Timestamp de Firestore (improbable aquí, pero seguro)
+                        lastNotificationTimestamp = loan.lastLateNotificationTimestamp.toDate();
+                    } else {
+                        // Caso 2: Es un string ISO (el caso más probable) o un objeto Date.
+                        // new Date() puede parsear ambos.
+                        lastNotificationTimestamp = new Date(loan.lastLateNotificationTimestamp);
+                    }
+                }
+                // --- [FIN DE LA CORRECCIÓN] ---
                 
                 // 3. Definir la frecuencia requerida
                 let requiredIntervalHours;
@@ -3084,4 +3100,3 @@ init();
     </script>
 </body>
 </html>
-
