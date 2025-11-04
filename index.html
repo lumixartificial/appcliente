@@ -583,6 +583,7 @@
         
         let currentClient = null;
         let unsubscribeClient = null;
+        let unsubscribeCollector = null;
 
         let currentAuthUid = null;     // ID do usuário logado no Firebase Auth
         let currentClientId = null;    // ID do documento do cliente no Firestore (ex: abc123xyz)
@@ -1651,11 +1652,21 @@
             profileView.querySelector('#logout-btn').addEventListener('click', handleLogout);
         }
 
+        
         function handleLogout() {
     if (unsubscribeClient) {
         unsubscribeClient();
         unsubscribeClient = null; // Limpa a referência
     }
+    
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Añadimos la limpieza para el listener del cobrador
+    if (unsubscribeCollector) {
+        unsubscribeCollector();
+        unsubscribeCollector = null;
+    }
+    // --- FIN DE LA CORRECCIÓN ---
+
     if (notificationInterval) {
         clearInterval(notificationInterval);
         notificationInterval = null; // Limpa a referência
@@ -1671,6 +1682,8 @@
     // O onAuthStateChanged será chamado com user=null e fará isso.
     console.log("[CLIENTE-APP] Logout iniciado. Aguardando onAuthStateChanged...");
 }
+
+
 
         function updatePayView() {
             const payViewContainer = document.getElementById('pay-view');
@@ -2218,7 +2231,7 @@ try {
 
     console.log(`[CLIENTE-APP] Buscando dados do cobrador com ID (username): ${currentCollectorId}...`);
 
-    let unsubscribeCollector = null;
+    
 
 
     // Usamos onSnapshot directamente con el ID del cobrador para escuchar cambios
@@ -3094,6 +3107,15 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
 
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
+
+            const loginBtn = document.querySelector('#login-form button[type="submit"]');
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                // Restauramos el innerHTML para que esté vacío.
+                // La función 'applyLanguage' (que se llama más abajo) se encargará de rellenar
+                // el texto correcto usando el 'data-lang-key' del botón.
+                loginBtn.innerHTML = ''; 
+            }
 
             // Garante que o listener do formulário de login (que usará Firebase Auth) seja adicionado
             const loginForm = document.getElementById('login-form');
