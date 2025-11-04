@@ -2853,56 +2853,61 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
 
         
         async function handleLogin(e) {
-    e.preventDefault();
-    const emailInput = document.getElementById('username'); // O ID ainda é 'username', mas agora DEVE ser um email
-    const passwordInput = document.getElementById('password');
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
+            e.preventDefault();
+            
+            // [CAMBIO] El ID 'username' ahora se trata como un 'username' real
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            
+            const username = usernameInput.value.trim(); // 1. Obtiene el 'username' (ej: 'maria_perez')
+            const password = passwordInput.value;
 
-    const loginBtn = document.querySelector('#login-form button');
-    const originalBtnHTML = loginBtn.innerHTML;
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
-    lucide.createIcons({ nodes: [loginBtn.querySelector('i')] });
+            // [CAMBIO] Construye el email con el sufijo @gmail.com
+            const email = `${username}@gmail.com`; 
 
-    try {
-        console.log(`[CLIENTE-APP] Tentando login com Firebase Auth para email: ${email}`);
-        // Usa signInWithEmailAndPassword
-        await signInWithEmailAndPassword(auth, email, password);
+            // --- (El resto del código de manejo del botón es idéntico al original) ---
+            const loginBtn = document.querySelector('#login-form button');
+            const originalBtnHTML = loginBtn.innerHTML;
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
+            lucide.createIcons({ nodes: [loginBtn.querySelector('i')] });
+            // --- (Fin del código del botón) ---
 
-        // SUCESSO! Não fazemos mais nada aqui.
-        // O onAuthStateChanged (na função init) será disparado automaticamente
-        // e cuidará de buscar os dados do cliente e mostrar a app.
-        console.log("[CLIENTE-APP] signInWithEmailAndPassword bem-sucedido. Aguardando onAuthStateChanged...");
-        // O botão será reativado pelo onAuthStateChanged (ou ficará desativado se o login falhar)
+            try {
+                // [CAMBIO] Inicia sesión con el 'email' construido
+                console.log(`[CLIENTE-APP] Tentando login com email construído: ${email}`);
+                await signInWithEmailAndPassword(auth, email, password);
 
-    } catch (error) {
-        console.error("[CLIENTE-APP] Erro de login (signInWithEmailAndPassword):", error.code, error.message);
-        let errorMsgKey = 'genericError';
-        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-            errorMsgKey = 'invalidCredentials';
-        } else if (error.code === 'auth/invalid-email') {
-             // Embora o campo seja 'username', ele espera um email agora
-             showToast('Formato de email inválido no campo usuário.', true); 
-             errorMsgKey = null; // Não mostra toast genérico
-        } else if (error.code === 'auth/too-many-requests') {
-             showToast('Muitas tentativas falhadas. Tente novamente mais tarde.', true);
-             errorMsgKey = null;
+                // SUCESSO! O onAuthStateChanged vai ser chamado automaticamente
+                console.log("[CLIENTE-APP] signInWithEmailAndPassword bem-sucedido. Aguardando onAuthStateChanged...");
+
+            } catch (error) {
+                // FALHA no login
+                console.error("[CLIENTE-APP] Erro de login (signInWithEmailAndPassword):", error.code, error.message);
+                
+                let errorMsgKey = 'genericError';
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                    errorMsgKey = 'invalidCredentials';
+                
+                // [CAMBIO] Mensaje de error actualizado
+                } else if (error.code === 'auth/invalid-email') {
+                     showToast('Usuário inválido (não pode conter @ ou espaços).', true);
+                     errorMsgKey = null; // No muestra toast genérico
+                } else if (error.code === 'auth/too-many-requests') {
+                     showToast('Muitas tentativas falhadas. Tente novamente mais tarde.', true);
+                     errorMsgKey = null;
+                }
+
+                if (errorMsgKey) showToast(translations[currentLang][errorMsgKey], true);
+
+                // --- (Restaurar el botón en error, idéntico al original) ---
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = originalBtnHTML;
+                 // Re-aplica el idioma al botón (necesario si el originalBtnHTML era solo la key)
+                applyLanguage(currentLang); 
+                // --- (Fin de restaurar botón) ---
+            }
         }
-
-        if (errorMsgKey) showToast(translations[currentLang][errorMsgKey], true);
-
-        // Reativa o botão em caso de erro
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = originalBtnHTML;
-        
-        // --- [CORRECCIÓN] ---
-        // A linha abaixo estava causando o bug e foi removida.
-        // applyLanguage(currentLang); 
-        // --- [FIM DA CORREÇÃO] ---
-    }
-    // Não há 'finally' aqui, o botão só reativa no erro.
-}
 
 
         
@@ -3079,3 +3084,4 @@ init();
     </script>
 </body>
 </html>
+
