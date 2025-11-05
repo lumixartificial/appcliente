@@ -955,10 +955,45 @@
         }
 
 
+        /* === INICIO: CÓDIGO AÑADIDO (BLOQUE 1/2) === */
+/**
+ * Verifica si el dispositivo es móvil (simplificado)
+ * @returns {boolean}
+ */
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+/* === FIN: CÓDIGO AÑADIDO (BLOQUE 1/2) === */
+
+
         function showOnboardingModal() {
     const modal = document.getElementById('onboardingModal');
-    if (!modal || modal.classList.contains('active')) return; // Evita abrirlo múltiples veces
+    if (!modal || modal.classList.contains('active')) return;
 
+    // --- [INICIO DE LA CORRECCIÓN - BUG A (PC)] ---
+    if (!isMobile()) {
+        // El usuario está en un PC. Muestra un error en lugar del botón.
+        modal.innerHTML = `
+        <div class="modal-content">
+            <i data-lucide="smartphone" style="width: 48px; height: 48px; color: var(--accent-purple); margin-bottom: 15px;"></i>
+            <h3 style="font-size: 1.3em; font-weight: 600; margin-top: 0; margin-bottom: 10px;">Acesso Móvil Requerido</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 25px; line-height: 1.5;">
+                Por razões de segurança, este passo de verificação de identidade
+                <strong>deve ser concluído no seu celular.</strong>
+            </p>
+            <p style="color: var(--text-secondary); font-size: 0.9em;">
+                Por favor, feche esta janela e acesse o portal através do seu smartphone.
+            </p>
+        </div>
+        `;
+        
+        modal.classList.add('active'); // Muestra el modal de error
+        lucide.createIcons({ nodes: modal.querySelectorAll('[data-lucide]') });
+        return; // Detiene la función aquí
+    }
+    // --- [FIN DE LA CORRECCIÓN - BUG A (PC)] ---
+
+    // Si es móvil, continúa con la lógica original...
     modal.innerHTML = `
         <div class="modal-content">
             <i data-lucide="camera" style="width: 48px; height: 48px; color: var(--accent-purple); margin-bottom: 15px;"></i>
@@ -966,7 +1001,6 @@
             <p style="color: var(--text-secondary); margin-bottom: 25px; line-height: 1.5;">
                 Para sua segurança, precisamos de uma foto de perfil (selfie) para verificar sua identidade antes de continuar.
             </p>
-            <!-- Este input está oculto, el botón de abajo lo activa -->
             <input type="file" id="onboarding-pic-input" accept="image/*" capture="user" style="display: none;">
             
             <button id="onboarding-take-photo-btn" class="btn-primary" style="width: 100%;">
@@ -975,20 +1009,22 @@
         </div>
     `;
     
-    modal.classList.add('active'); // Muestra el modal
+    modal.classList.add('active');
     lucide.createIcons({ nodes: modal.querySelectorAll('[data-lucide]') });
 
-    // Listener para el botón
     modal.querySelector('#onboarding-take-photo-btn').addEventListener('click', () => {
-        // Activa el input de archivo (que abrirá la cámara por 'capture="user"')
         modal.querySelector('#onboarding-pic-input').click();
     });
 
-    // Listener para el input de archivo
     modal.querySelector('#onboarding-pic-input').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            // Llama al cropper (que ya existe) pasándole el propósito 'onboarding'
+            
+            // --- [INICIO DE LA CORRECCIÓN - BUG B (MÓVIL)] ---
+            // ¡CIERRA el modal de aviso (z-index 500) ANTES de abrir el recortador (z-index 200)!
+            modal.classList.remove('active');
+            // --- [FIN DE LA CORRECCIÓN - BUG B (MÓVIL)] ---
+
             showCropperModal(file, 'onboarding');
         }
     });
@@ -3187,5 +3223,3 @@ init();
     </script>
 </body>
 </html>
-
-
