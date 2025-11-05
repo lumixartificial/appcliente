@@ -502,6 +502,8 @@
     padding: 20px;
     text-align: center;
     /* Este contenedor estará debajo del video, así que el texto tendrá el color normal */
+    position: relative; /* Añadido para crear un contexto de apilamiento */
+    z-index: 5;
 }
 
 #desafio-instruction {
@@ -3542,3 +3544,4 @@ init();
     </script>
 </body>
 </html>
+
