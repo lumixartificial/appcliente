@@ -459,8 +459,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Fondo oscuro semitransparente que cubre todo */
-    background: rgba(0,0,0,0.7); 
+    /* (Fondo oscuro ELIMINADO de aquí. El 'box-shadow' del óvalo ahora crea la máscara) */
+    /* background: rgba(0,0,0,0.7); */ /* <-- LÍNEA ELIMINADA */
 }
 #desafio-oval {
     width: 250px;
@@ -2209,6 +2209,7 @@ function sleep(ms) {
  * Muestra el modal de desafío de prueba de vida (selfie)
  * (Versión 2.0 con secuencia automática)
  */
+
 async function showDesafioModal(monto, parcelas) {
     const modal = document.getElementById('desafioModal');
     if (!modal) return;
@@ -2281,11 +2282,11 @@ async function showDesafioModal(monto, parcelas) {
     try {
         // Desafío 1: Centrar
         instructionEl.textContent = "Centralize seu rosto no círculo";
-        await sleep(3000); // 3 segundos para centrar
+        await sleep(5000); // 5 segundos para centrar (ANTES 3000)
 
         // Desafío 2: Sonreír (El desafío que pediste)
         instructionEl.textContent = "Ótimo! Agora, SORRIA para a câmera";
-        await sleep(3000); // 3 segundos para sonreír
+        await sleep(5000); // 5 segundos para sonreír (ANTES 3000)
 
         // Desafío 3: Captura
         instructionEl.textContent = "Capturando...";
@@ -2324,6 +2325,7 @@ async function showDesafioModal(monto, parcelas) {
     }
     // --- [FIN] NUEVA SECUENCIA DE DESAFÍO ---
 }
+/* === FIN: CÓDIGO A REEMPLAZAR (BLOQUE 2/2) === */
 
 
 
@@ -3544,4 +3546,3 @@ init();
     </script>
 </body>
 </html>
-
