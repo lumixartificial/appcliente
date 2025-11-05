@@ -2368,20 +2368,27 @@ async function saveRefinanceRequest(amount, installments, challengePhotoUrl) {
                 amount: amount, 
                 installments: installments, 
                 requestDate: new Date(),
-                status: 'pending',
-                challengePhotoUrl: challengePhotoUrl // <-- ¡LA NUEVA FOTO!
+                status: 'pending', // Correcto: va al admin
+                challengePhotoUrl: challengePhotoUrl 
             } 
         });
         
         showToast(translations[currentLang].analysisSent, false);
         
-        // Notifica al cobrador (como antes)
+        // --- [INICIO DE LA CORRECCIÓN] ---
+        // NOTIFICACIÓN ANTIGUA AL COBRADOR ELIMINADA.
+        // (La notificación 'refinance' ahora es enviada por el Admin en la Fase 3,
+        // después de aprobar la prueba de vida.)
+        /*
         sendNotificationToCollector(
             `${currentClient.name}`, 
             `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 
             'refinance',
             'trending-up'
         );
+        */
+        console.log("[CLIENTE-APP] Solicitud de refinanciamento guardada. Notificación al cobrador OMITIDA (ahora es tarea del Admin).");
+        // --- [FIN DE LA CORRECCIÓN] ---
 
         // Cierra el modal de desafío
         document.getElementById('desafioModal').classList.remove('active');
@@ -3544,4 +3551,3 @@ init();
     </script>
 </body>
 </html>
-
