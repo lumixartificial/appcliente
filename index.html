@@ -430,6 +430,80 @@
 }
 
 
+    #desafioModal .modal-content {
+    padding: 0; /* Sin padding para que el video ocupe todo */
+    overflow: hidden; /* Oculta bordes del video */
+    position: relative; /* Para superponer elementos */
+    background-color: #000;
+}
+#desafio-video-container {
+    position: relative;
+    width: 100%;
+    /* Forzamos un aspect-ratio de 4:3 (cámara selfie) */
+    padding-top: 133.33%; 
+    background-color: #000;
+}
+#desafio-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Rellena el contenedor */
+    /* Espejado para vista selfie */
+    transform: scaleX(-1); 
+}
+#desafio-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px;
+    /* Añadimos un gradiente suave para legibilidad */
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.6) 100%);
+}
+#desafio-instruction {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: white;
+    background-color: rgba(0,0,0,0.5);
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-align: center;
+    margin-top: 20px;
+}
+#desafio-shutter-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background-color: white;
+    border: 5px solid rgba(255,255,255,0.3);
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+    margin-bottom: 20px;
+}
+#desafio-shutter-btn:active {
+    transform: scale(0.95);
+}
+#desafio-loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0,0,0,0.7);
+    display: none; /* Oculto por defecto */
+    justify-content: center;
+    align-items: center;
+    color: white;
+    z-index: 10;
+}
+/* Canvas oculto para tomar la foto */
+#desafio-canvas {
+    display: none;
+}
+
+
 
     </style>
 </head>
@@ -591,6 +665,11 @@
     <div id="onboardingModal" class="modal-overlay">
         <!-- El contenido se generará por JS -->
     </div>
+
+    <div id="desafioModal" class="modal-overlay">
+        <!-- El contenido se generará por JS -->
+    </div>
+
     <div id="toast-container"></div>
 
 
@@ -1111,6 +1190,9 @@ async function handleOnboardingPhotoUpload(blob) {
         }
     }
 }
+
+
+
 
 
 
@@ -2067,7 +2149,188 @@ async function handleOnboardingPhotoUpload(blob) {
             }
         }
 
+
+
+        /* === INICIO: CÓDIGO AÑADIDO (FASE 2 - BLOQUE 3/4) === */
+
+// Variable global para guardar el stream de la cámara y poder detenerlo
+let currentChallengeStream = null;
+
+/**
+ * Detiene el stream de la cámara (si está activo)
+ */
+function stopChallengeCamera() {
+    if (currentChallengeStream) {
+        console.log("[CLIENTE-APP] Deteniendo stream de cámara de desafío...");
+        currentChallengeStream.getTracks().forEach(track => track.stop());
+        currentChallengeStream = null;
+    }
+}
+
+/**
+ * Muestra el modal de desafío de prueba de vida (selfie)
+ */
+async function showDesafioModal(monto, parcelas) {
+    const modal = document.getElementById('desafioModal');
+    if (!modal) return;
+
+    // HTML del modal
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div id="desafio-video-container">
+                <video id="desafio-video" autoplay playsinline muted></video>
+                <canvas id="desafio-canvas"></canvas>
+                
+                <div id="desafio-overlay">
+                    <span id="desafio-instruction">Centralize seu rosto</span>
+                    <button id="desafio-shutter-btn" title="Tirar Foto"></button>
+                </div>
+                
+                <div id="desafio-loading-overlay">
+                    <i data-lucide="loader-circle" style="width: 48px; height: 48px; animation: spin 1s linear infinite;"></i>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.add('active');
+    lucide.createIcons({ nodes: modal.querySelectorAll('[data-lucide]') });
+
+    const video = document.getElementById('desafio-video');
+    const shutterBtn = document.getElementById('desafio-shutter-btn');
+    const loadingOverlay = document.getElementById('desafio-loading-overlay');
+    
+    // 1. Iniciar Cámara
+    try {
+        // Detiene cualquier stream anterior (por si acaso)
+        stopChallengeCamera(); 
         
+        // Pide el stream de video (cámara frontal)
+        currentChallengeStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' },
+            audio: false 
+        });
+        
+        video.srcObject = currentChallengeStream;
+    } catch (err) {
+        console.error("[CLIENTE-APP] Erro ao acessar a câmera:", err);
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+            showToast("Permissão da câmera negada. Habilite nas configurações.", true);
+        } else {
+            showToast("Não foi possível acessar a câmera.", true);
+        }
+        modal.classList.remove('active');
+        stopChallengeCamera();
+        // IMPORTANTE: Restaura el botón del formulario de refinanciamiento si la cámara falla
+        const submitBtn = document.querySelector('#refinance-form button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span data-lang-key="sendForAnalysis">${translations[currentLang].sendForAnalysis}</span>`;
+        }
+        return;
+    }
+
+    // 2. Listener del Botón de Captura
+    shutterBtn.onclick = () => {
+        loadingOverlay.style.display = 'flex'; // Muestra el spinner
+        
+        const canvas = document.getElementById('desafio-canvas');
+        const context = canvas.getContext('2d');
+        
+        // Ajusta el tamaño del canvas al del video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Dibuja la imagen (espejada, igual que el video)
+        context.save();
+        context.scale(-1, 1); // Espeja horizontalmente
+        context.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+        context.restore(); // Restaura el contexto
+        
+        // Detiene la cámara INMEDIATAMENTE después de la foto
+        stopChallengeCamera(); 
+        
+        // Convierte a Blob y sube
+        canvas.toBlob((blob) => {
+            handleDesafioPhotoUpload(blob, monto, parcelas);
+        }, 'image/jpeg', 0.9);
+    };
+}
+
+/**
+ * Sube la foto del desafío y llama a guardar la solicitud
+ */
+async function handleDesafioPhotoUpload(blob, monto, parcelas) {
+    if (!blob) {
+        showToast("Erro ao capturar foto.", true);
+        document.getElementById('desafioModal').classList.remove('active');
+        return;
+    }
+
+    try {
+        if (!currentCompanyId || !currentClientId) throw new Error("IDs não definidos para upload de foto de desafio.");
+
+        const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/desafio_refinanciamento.jpg`);
+        console.log(`[CLIENTE-APP] Subindo FOTO DE DESAFIO para: ${storageRef.fullPath}`);
+        showToast('Enviando verificação...', false);
+
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        console.log(`[CLIENTE-APP] Foto de desafio subida. URL: ${downloadURL}`);
+
+        // ¡Éxito! Ahora guarda la solicitud
+        await saveRefinanceRequest(monto, parcelas, downloadURL);
+
+    } catch (error) {
+        console.error("[CLIENTE-APP] Erro ao subir FOTO DE DESAFIO:", error);
+        showToast("Erro ao salvar sua foto de verificação. Tente novamente.", true);
+        document.getElementById('desafioModal').classList.remove('active');
+    }
+}
+
+/**
+ * Guarda la solicitud de refinanciamiento en Firestore
+ */
+async function saveRefinanceRequest(amount, installments, challengePhotoUrl) {
+    try {
+        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+        
+        await updateDoc(clientRef, { 
+            refinanceRequest: { 
+                amount: amount, 
+                installments: installments, 
+                requestDate: new Date(),
+                status: 'pending',
+                challengePhotoUrl: challengePhotoUrl // <-- ¡LA NUEVA FOTO!
+            } 
+        });
+        
+        showToast(translations[currentLang].analysisSent, false);
+        
+        // Notifica al cobrador (como antes)
+        sendNotificationToCollector(
+            `${currentClient.name}`, 
+            `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 
+            'refinance',
+            'trending-up'
+        );
+
+        // Cierra el modal de desafío
+        document.getElementById('desafioModal').classList.remove('active');
+        
+        // Actualiza la vista de refinanciamiento (para mostrar "Solicitud enviada")
+        updateRefinanceView(); 
+
+    } catch (error) {
+        console.error("Error sending refinance request:", error);
+        showToast(translations[currentLang].genericError, true);
+        document.getElementById('desafioModal').classList.remove('active');
+    }
+}
+/* === FIN: CÓDIGO AÑADIDO (FASE 2 - BLOQUE 3/4) === */
+
+
+
         function updateRefinanceView() {
             if (!currentClient || !document.getElementById('refinance-view')) return;
             const container = document.getElementById('refinance-view');
@@ -2078,8 +2341,7 @@ async function handleOnboardingPhotoUpload(blob) {
             const score = Math.max(0, 10 - lateDays);
             let content = '';
 
-            // --- INICIO: LÓGICA CORREGIDA ---
-            // Solo comprueba la puntuación. Si es 10, muestra el formulario.
+            // --- INICIO: LÓGICA CORREGIDA (Sin cambios) ---
             if (score === 10) { 
                 content = `<div class="container">
                                <h2 class="section-title" data-lang-key="refinanceTitle"></h2>
@@ -2113,12 +2375,14 @@ async function handleOnboardingPhotoUpload(blob) {
             
             const form = document.getElementById('refinance-form');
             if (form) {
+                
+                // --- [INICIO DE LA MODIFICACIÓN (FASE 2)] ---
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const amountInput = document.getElementById('refinance-amount');
                     const installmentsInput = document.getElementById('refinance-installments');
-                    const submitBtn = form.querySelector('button[type="submit"]'); // <-- Captura el botón
-                    const originalBtnHTML = submitBtn.innerHTML; // <-- Guarda HTML original
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    const originalBtnHTML = submitBtn.innerHTML;
 
                     const amount = parseFloat(amountInput.value);
                     const installments = parseInt(installmentsInput.value, 10);
@@ -2128,46 +2392,35 @@ async function handleOnboardingPhotoUpload(blob) {
                         return;
                     }
 
-                    // --- INICIO: Añadir indicador de carga ---
+                    // Muestra estado de carga en el botón ANTES de abrir el modal de desafío
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i>`;
                     lucide.createIcons({ nodes: [submitBtn.querySelector('i')] });
-                    // --- FIN: Añadir indicador de carga ---
 
                     try {
-                        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
-                        // Guarda la nueva solicitud (sobrescribe la anterior si existía)
-                        await updateDoc(clientRef, { 
-                            refinanceRequest: { 
-                                amount: amount, 
-                                installments: installments, 
-                                requestDate: new Date(), // Usa new Date() en lugar de serverTimestamp para consistencia
-                                status: 'pending' 
-                            } 
-                        });
-                        showToast(translations[currentLang].analysisSent);
-                        // Llama a la función para notificar al cobrador (esta ya estaba correcta)
-                        sendNotificationToCollector(
-                            `${currentClient.name}`, 
-                            `${translations[currentLang].refinanceRequested} ${money(amount)}.`, 
-                            'refinance', // tipo
-                            'trending-up' // icono
-                        );
-                        // Actualiza la vista para mostrar "Solicitação enviada" de nuevo
-                        updateRefinanceView(); 
-
-                    } catch (error) {
-                        console.error("Error sending refinance request:", error);
-                        showToast(translations[currentLang].genericError, true);
-                        // --- INICIO: Restaurar botón en error ---
+                        // 1. Llama al nuevo modal de desafío
+                        await showDesafioModal(amount, installments);
+                        
+                        // 2. Si todo va bien, el modal de desafío se encargará de guardar y notificar.
+                        //    Solo necesitamos restaurar el botón del formulario aquí.
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = originalBtnHTML;
-                        // --- FIN: Restaurar botón en error ---
-                    } 
-                    // No necesitamos 'finally' aquí si no restauramos el botón en caso de éxito
+                        applyLanguage(currentLang); // Re-aplica el texto (ej. "Enviar para Análise")
+
+                    } catch (error) {
+                        // Si showDesafioModal falla (ej. error de cámara), restauramos el botón
+                        console.error("Error al iniciar el modal de desafío:", error);
+                        showToast("Erro ao iniciar verificação da câmera.", true);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHTML;
+                        applyLanguage(currentLang);
+                    }
                 });
+                // --- [FIN DE LA MODIFICACIÓN (FASE 2)] ---
             }
         }
+        
+        
 
 
 
