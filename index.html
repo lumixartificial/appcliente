@@ -398,6 +398,39 @@
         .no-notifications { color: var(--text-secondary); text-align: center; padding: 20px; }
         
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+
+        .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: none; /* Oculto por defecto */
+    justify-content: center;
+    align-items: center;
+    z-index: 500; /* Z-index alto para bloquear */
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+.modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+.modal-content {
+    background-color: var(--surface);
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    text-align: center;
+}
+
+
+
     </style>
 </head>
 <body>
@@ -555,7 +588,12 @@
     </div>
 
     <div id="cropperModal" class="modal-view"></div>
+    <div id="onboardingModal" class="modal-overlay">
+        <!-- El contenido se generará por JS -->
+    </div>
     <div id="toast-container"></div>
+
+
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script type="module">
@@ -915,6 +953,131 @@
                 }, 300);
             }, 3000);
         }
+
+
+        function showOnboardingModal() {
+    const modal = document.getElementById('onboardingModal');
+    if (!modal || modal.classList.contains('active')) return; // Evita abrirlo múltiples veces
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <i data-lucide="camera" style="width: 48px; height: 48px; color: var(--accent-purple); margin-bottom: 15px;"></i>
+            <h3 style="font-size: 1.3em; font-weight: 600; margin-top: 0; margin-bottom: 10px;">Verificação de Segurança</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 25px; line-height: 1.5;">
+                Para sua segurança, precisamos de uma foto de perfil (selfie) para verificar sua identidade antes de continuar.
+            </p>
+            <!-- Este input está oculto, el botón de abajo lo activa -->
+            <input type="file" id="onboarding-pic-input" accept="image/*" capture="user" style="display: none;">
+            
+            <button id="onboarding-take-photo-btn" class="btn-primary" style="width: 100%;">
+                <i data-lucide="camera"></i> Abrir Câmera e Tirar Selfie
+            </button>
+        </div>
+    `;
+    
+    modal.classList.add('active'); // Muestra el modal
+    lucide.createIcons({ nodes: modal.querySelectorAll('[data-lucide]') });
+
+    // Listener para el botón
+    modal.querySelector('#onboarding-take-photo-btn').addEventListener('click', () => {
+        // Activa el input de archivo (que abrirá la cámara por 'capture="user"')
+        modal.querySelector('#onboarding-pic-input').click();
+    });
+
+    // Listener para el input de archivo
+    modal.querySelector('#onboarding-pic-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            // Llama al cropper (que ya existe) pasándole el propósito 'onboarding'
+            showCropperModal(file, 'onboarding');
+        }
+    });
+}
+
+/**
+ * Sube la FOTO DE PERFIL (profile.jpg) y actualiza 'profilePictureUrl'.
+ * (Esta función faltaba y corrige el bug de la foto de perfil)
+ */
+async function handleProfilePictureChange(blob) {
+    if (!blob) return;
+    const profileViewImg = document.getElementById('profile-view-img');
+    if(profileViewImg) profileViewImg.classList.add('loading');
+    
+    try {
+        if (!currentCompanyId || !currentClientId) throw new Error("IDs não definidos para upload de foto de perfil.");
+
+        // 1. Ruta para FOTO DE PERFIL
+        const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/profile.jpg`);
+        console.log(`[CLIENTE-APP] Subindo FOTO DE PERFIL para: ${storageRef.fullPath}`);
+        showToast('Atualizando foto de perfil...', false);
+
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+
+        // 2. Campo para FOTO DE PERFIL
+        const clientDocRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+        await updateDoc(clientDocRef, { profilePictureUrl: downloadURL });
+
+        showToast(translations[currentLang].picUpdateSuccess);
+    } catch (error) {
+        console.error("[CLIENTE-APP] Erro ao atualizar FOTO DE PERFIL:", error);
+        showToast(translations[currentLang].picUpdateError, true);
+    } finally {
+        if(profileViewImg) profileViewImg.classList.remove('loading');
+    }
+}
+
+/**
+ * Sube la FOTO BASE (foto_base.jpg) y actualiza 'fotoBaseUrl'.
+ * (Esta es la nueva función para el Onboarding)
+ */
+async function handleOnboardingPhotoUpload(blob) {
+    if (!blob) return;
+    const modal = document.getElementById('onboardingModal');
+    const button = modal ? modal.querySelector('#onboarding-take-photo-btn') : null;
+
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = `<i data-lucide="loader-circle" style="animation: spin 1s linear infinite;"></i> Validando...`;
+        lucide.createIcons({ nodes: [button.querySelector('i')] });
+    }
+
+    try {
+        if (!currentCompanyId || !currentClientId) throw new Error("IDs não definidos para upload da foto base.");
+
+        // 1. Ruta para FOTO BASE
+        const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/foto_base.jpg`);
+        console.log(`[CLIENTE-APP] Subindo FOTO BASE para: ${storageRef.fullPath}`);
+        showToast('Verificando sua foto...', false);
+
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        console.log(`[CLIENTE-APP] Foto base subida com sucesso. URL: ${downloadURL}`);
+
+        // 2. Campo para FOTO BASE
+        const clientDocRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+        await updateDoc(clientDocRef, { fotoBaseUrl: downloadURL });
+
+        showToast('Verificação concluída! Bem-vindo.', false);
+        
+        // ¡Éxito! Cierra el modal de onboarding.
+        // El 'onSnapshot' en 'showMainApp' detectará el cambio en 'fotoBaseUrl'
+        // y procederá a iniciar el FCM y las notificaciones.
+        if (modal) modal.classList.remove('active');
+
+    } catch (error) {
+        console.error("[CLIENTE-APP] Erro ao subir FOTO BASE:", error);
+        showToast("Erro ao salvar sua foto de verificação. Tente novamente.", true);
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = `<i data-lucide="camera"></i> Tentar Novamente`;
+            lucide.createIcons({ nodes: [button.querySelector('i')] });
+        }
+    }
+}
+
+
+
 
         function showBlockedView(message) {
     console.error("Acceso bloqueado:", message);
@@ -2173,186 +2336,164 @@ try {
         }
 
         function showMainApp(clientId, companyId) { // Recibe clientId y companyId
-    // [INICIO CÓDIGO CORREGIDO] Verifica clientId y companyId, no authUid
     if (!clientId || !companyId) {
-        console.error("[CLIENTE-APP] showMainApp chamada sem clientId ou companyId!"); // Mensaje corregido
-        showBlockedView("Erro interno: IDs do cliente ou empresa não encontrados."); // Mensaje corregido
-        // Considera si quieres desloguear aquí o no, tal vez solo mostrar el error.
-        // signOut(auth); // Descomenta si quieres desloguear en este caso.
+        console.error("[CLIENTE-APP] showMainApp llamada sem clientId ou companyId!");
+        showBlockedView("Erro interno: IDs do cliente ou empresa não encontrados.");
         return;
     }
 
     console.log(`[CLIENTE-APP] showMainApp iniciada para ClientID: ${clientId}, CompanyID: ${companyId}`);
 
     document.getElementById('login-view').style.display = 'none';
-    document.getElementById('splash-screen').style.display = 'none'; // Garante que o splash está oculto
-    document.getElementById('app-container').style.display = 'flex'; // Mostra o container principal
+    document.getElementById('splash-screen').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
 
-    // Renderiza o layout principal (cabeçalho, navegação) UMA VEZ
-    // A flag evita re-renderizar em re-autenticações rápidas
     if (!document.body.dataset.layoutRendered) {
-        
-        lucide.createIcons(); // Cria ícones do layout base
+        lucide.createIcons();
         document.body.dataset.layoutRendered = 'true';
     }
     
-
-    // Garante que listeners sejam adicionados apenas uma vez
     if (!document.body.dataset.listenersAttached) {
         setupEventListeners();
         document.body.dataset.listenersAttached = 'true';
     }
 
-    // Mostra a vista inicial ou a do hash
     showView(location.hash.substring(1) || 'home');
 
-    let isFirstLoad = true; // Flag para executar a configuração apenas uma vez
-    let collectorData = null; // Redefinido aqui para clareza
+    // [MODIFICACIÓN] Mantenemos isFirstLoad aquí, pero la usaremos DENTRO del listener del cliente
+    let isFirstLoad = true; 
+    let collectorData = null; 
 
-    // Cancela o listener de cliente anterior se existir (importante ao re-logar)
     if (unsubscribeClient) {
-        console.log("[COBRADOR-APP] Cancelando listener de cliente anterior.");
+        console.log("[CLIENTE-APP] Cancelando listener de cliente anterior.");
         unsubscribeClient();
         unsubscribeClient = null;
     }
-    // TODO: Cancelar outros listeners (expenses, settlements) se eles também forem definidos globalmente.
+    // [MODIFICACIÓN] Cancelamos el listener del cobrador también
+    if (unsubscribeCollector) {
+        console.log("[CLIENTE-APP] Cancelando listener de cobrador anterior.");
+        unsubscribeCollector();
+        unsubscribeCollector = null;
+    }
 
-    // Agora, usamos o authUid para encontrar o documento do cobrador correto
-    
-    console.log(`[CLIENTE-APP] Buscando documento do cobrador com authUid: ${currentAuthUid}...`); // <-- CORREGIDO: Usa global currentAuthUid
-    
     if (!currentCollectorId) {
-        // Si por alguna razón no tenemos el ID del cobrador, no podemos continuar.
         console.error("[CLIENTE-APP] ID do cobrador (collectorId) não encontrado nos dados do cliente.");
         showBlockedView("Erro: Não foi possível identificar o cobrador associado.");
-        signOut(auth); // Deslogueamos porque es un error crítico de datos.
+        signOut(auth);
         return;
     }
 
     console.log(`[CLIENTE-APP] Buscando dados do cobrador com ID (username): ${currentCollectorId}...`);
+    
+    // Listener del Cobrador (para obtener configuraciones de pago)
+    unsubscribeCollector = onSnapshot(doc(db, 'collectors', currentCollectorId), (docSnap) => {
+        if (docSnap.exists()) {
+            collectorSettings = docSnap.data();
+            console.log("[CLIENTE-APP] Dados do cobrador (collectorSettings) obtidos/atualizados.");
+            
+            // Si la vista de pago está activa, la actualizamos
+            if (document.getElementById('pay-view').classList.contains('active')) {
+                updatePayView();
+            }
 
+        } else {
+            console.error(`[CLIENTE-APP] Documento do cobrador ${currentCollectorId} não existe!`);
+            showBlockedView("Erro crítico: Os dados do seu cobrador não foram encontrados.");
+            signOut(auth);
+        }
+    }, (error) => {
+        console.error(`[CLIENTE-APP] Erro ao escutar dados do cobrador ${currentCollectorId}:`, error);
+        showBlockedView("Erro de conexão ao carregar dados do cobrador.");
+        signOut(auth);
+    });
     
 
+    // Listener del CLIENTE (Aquí ocurre la magia del Onboarding)
+    console.log(`[CLIENTE-APP] Iniciando listener para cliente: companies/${currentCompanyId}/clients/${currentClientId}`);
+    unsubscribeClient = onSnapshot(doc(db, 'companies', currentCompanyId, "clients", currentClientId), (clientSnapshot) => {
+        
+        if (!clientSnapshot.exists() || !clientSnapshot.data()) {
+            console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído, inacessível ou está vazio?`);
+            showBlockedView("Erro: Seus dados de cliente não puderam ser carregados ou estão corrompidos.");
+            signOut(auth);
+            return;
+        }
+        console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
+        currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() };
 
-    // Usamos onSnapshot directamente con el ID del cobrador para escuchar cambios
-    
-    // [REEMPLAZA EL BLOQUE onSnapshot DEL COBRADOR CON ESTO]
-            unsubscribeCollector = onSnapshot(doc(db, 'collectors', currentCollectorId), (docSnap) => {
-                if (docSnap.exists()) {
-                    collectorSettings = docSnap.data(); // Guarda los datos del cobrador en la variable global 'collectorSettings'
-                    console.log("[CLIENTE-APP] Dados do cobrador obtidos/atualizados:", collectorSettings);
+        // --- [INICIO: LÓGICA DE ONBOARDING Y FCM (BLOQUE 3/6)] ---
+        // Este es el núcleo de la Fase 1
         
-                    // ... (código existente que estaba aquí, como updatePayView) ...
-                    updatePayView(); // <-- Esta llamada está bien aquí
+        if (!currentClient.fotoBaseUrl) {
+            // 1. No tiene foto. Mostrar modal de onboarding.
+            console.log("[CLIENTE-APP] Falta foto base. Mostrando modal de onboarding.");
+            showOnboardingModal(); // Nueva función que añadiremos
+            // No iniciamos FCM ni notificaciones
+            if (notificationInterval) clearInterval(notificationInterval); // Detiene intervalos si estaban corriendo
+            isFirstLoad = true; // Forzamos a que isFirstLoad se mantenga true hasta que pase el onboarding
 
-                    // Lógica de primeira carga (FCM) - Executa apenas uma vez após obter os dados iniciais
-                    if (isFirstLoad) {
-                        console.log('[CLIENTE-APP] Carga inicial do cobrador completa. Configurando FCM...');
-                        setupFCM(); // La función setupFCM en cliente.html ya usa las variables globales correctas
-                        
-                        // --- [INICIO DE LA CORRECCIÓN] ---
-                        // 1. Limpia cualquier intervalo anterior (por si acaso)
-                        if (notificationInterval) clearInterval(notificationInterval);
-                        
-                        // 2. Inicia el verificador de notificaciones en un temporizador (cada 60 segundos)
-                        // Esto evita que onSnapshot se llame a sí mismo en un bucle.
-                        console.log("[CLIENTE-APP] Iniciando temporizador de verificação de atrasos (60s).");
-                        
-                        // [CORRECCIÓN 1/3] Ejecuta una vez al inicio
-                        checkAndSendLatePaymentNotifications(); 
-                        
-                        // [CORRECCIÓN 2/3] Y luego lo ejecuta cada 60 segundos
-                        notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 60000); 
-                        // --- [FIN DE LA CORRECCIÓN] ---
+        } else {
+            // 2. Tiene foto. Funcionar normalmente.
+            console.log("[CLIENTE-APP] Foto base encontrada.");
+            
+            // Oculta el modal de onboarding si estuviera abierto
+            const onboardingModal = document.getElementById('onboardingModal');
+            if (onboardingModal.classList.contains('active')) {
+                onboardingModal.classList.remove('active');
+            }
 
-                        isFirstLoad = false; // Marca que la primera carga foi concluída
-                    }
-        
-                    // --- INÍCIO LISTENERS MOVIDOS PARA DENTRO ---
-                    // (Estes listeners agora começam DEPOIS de sabermos os dados do cobrador)
-        
-                    // Listener de CLIENTE (onSnapshot en el documento del cliente actual)
-                    // Cancela listener anterior si existe
-                    if (unsubscribeClient) unsubscribeClient();
-                    console.log(`[CLIENTE-APP] Iniciando listener para cliente: companies/${currentCompanyId}/clients/${currentClientId}`);
-                    unsubscribeClient = onSnapshot(doc(db, 'companies', currentCompanyId, "clients", currentClientId), (clientSnapshot) => {
-                        
-                        if (!clientSnapshot.exists() || !clientSnapshot.data()) {
-                        console.error(`[CLIENTE-APP] Documento do cliente ${currentClientId} foi excluído, inacessível ou está vazio?`);
-                        showBlockedView("Erro: Seus dados de cliente não puderam ser carregados ou estão corrompidos.");
-                        signOut(auth);
-                        return; // Detiene la ejecución si no hay datos válidos
-                    }
-                    console.log("[CLIENTE-APP] Dados do cliente atualizados via onSnapshot.");
-                    currentClient = { id: clientSnapshot.id, ...clientSnapshot.data() }; // Actualiza datos globales del cliente
-        
-                    // Recalcula el estado de los préstamos solo si existen
-                    // [CORRECCIÓN] Añadida verificación extra por si 'loans' no es un array
-                    
-        
-                    if (currentClient && Array.isArray(currentClient.loans)) {
-                    console.log("[CLIENTE-APP][DIAG-UI] Procesando préstamos..."); // <-- Log añadido
-                    currentClient.loans.forEach(loan => {
-                         if (!loan) return;
-                        try { // <-- Añadir try/catch alrededor del cálculo
-                             const loanDetails = calculateLoanDetails(loan);
-                             loan.status = loanDetails.status;
-                             loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
-                        } catch (calcError) {
-                             console.error(`[CLIENTE-APP][DIAG-UI] ERROR en calculateLoanDetails para un préstamo:`, calcError, loan); // <-- Log de error específico
-                        }
-                    });
-                    console.log("[CLIENTE-APP][DIAG-UI] Préstamos procesados. Llamando a updateAllViews()..."); // <-- Log añadido
-                    try {
-                        updateAllViews(); // <-- Llamada actual envuelta en try/catch
-                        console.log("[CLIENTE-APP][DIAG-UI] ¡updateAllViews() completada com sucesso!"); // <-- Log añadido
-                        
-                        // --- [INICIO DE LA CORRECCIÓN] ---
-                        // 3. ¡ELIMINAR LA LLAMADA DE AQUÍ!
-                        // checkAndSendLatePaymentNotifications(); // <-- [CORRECCIÓN 3/3] LÍNEA ELIMINADA
-                        // --- [FIN DE LA CORRECCIÓN] ---
+            // Mover la lógica de 'isFirstLoad' aquí
+            if (isFirstLoad) {
+                console.log('[CLIENTE-APP] Carga inicial do cliente completa. Configurando FCM e Notificações...');
+                setupFCM();
+                checkAndSendLatePaymentNotifications();
+                notificationInterval = setInterval(checkAndSendLatePaymentNotifications, 60000);
+                isFirstLoad = false; // Marca que la primera carga foi concluída
+            }
+        }
+        // --- [FIN: LÓGICA DE ONBOARDING Y FCM] ---
 
-                    } catch (updateError) {
-                         console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateAllViews():", updateError); // <-- Log de error específico
-                    }
-                } else {
-                     console.warn("[CLIENTE-APP][DIAG-UI] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo y updateAllViews()."); // <-- Log modificado
-                     // Si no hay préstamos, ¿deberíamos actualizar algo? Quizás el perfil.
-                     try {
-                         updateProfileView(); // Intentamos actualizar solo el perfil
-                         console.log("[CLIENTE-APP][DIAG-UI] updateProfileView() llamada (sin préstamos).");
-                     } catch (profileError) {
-                          console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateProfileView() (sin préstamos):", profileError);
-                     }
+        // Procesamiento de préstamos y actualización de UI (Sin cambios)
+        if (currentClient && Array.isArray(currentClient.loans)) {
+            console.log("[CLIENTE-APP][DIAG-UI] Procesando préstamos...");
+            currentClient.loans.forEach(loan => {
+                 if (!loan) return;
+                try {
+                     const loanDetails = calculateLoanDetails(loan);
+                     loan.status = loanDetails.status;
+                     loan.lateFeesAccumulated = loanDetails.lateFeesAccumulated;
+                } catch (calcError) {
+                     console.error(`[CLIENTE-APP][DIAG-UI] ERROR en calculateLoanDetails para un préstamo:`, calcError, loan);
                 }
-        
-        
-                    }, (error) => {
-                         console.error(`[CLIENTE-APP] Erro ao escutar dados do cliente ${currentClientId}:`, error);
-                         showBlockedView("Erro de conexão ao carregar seus dados.");
-                         signOut(auth);
-                    });
-        
-                    // --- FIN LISTENERS MOVIDOS ---
-        
-        
-                } else {
-                    // Si el documento del cobrador no existe (¡muy raro!)
-                    console.error(`[CLIENTE-APP] Documento do cobrador ${currentCollectorId} não existe!`);
-                    showBlockedView("Erro crítico: Os dados do seu cobrador não foram encontrados.");
-                    signOut(auth);
-                }
-            }, (error) => { // Manejo de erro para onSnapshot do cobrador
-                console.error(`[CLIENTE-APP] Erro ao escutar dados do cobrador ${currentCollectorId}:`, error);
-                showBlockedView("Erro de conexão ao carregar dados do cobrador.");
-                signOut(auth);
             });
-    
-     // Fim do getDocs().catch()
+            console.log("[CLIENTE-APP][DIAG-UI] Préstamos procesados. Llamando a updateAllViews()...");
+            try {
+                updateAllViews();
+                console.log("[CLIENTE-APP][DIAG-UI] ¡updateAllViews() completada com sucesso!");
+            } catch (updateError) {
+                 console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateAllViews():", updateError);
+            }
+        } else {
+             console.warn("[CLIENTE-APP][DIAG-UI] Cliente atualizado, mas 'loans' não é um array ou está ausente. Pulando recálculo y updateAllViews().");
+             try {
+                 updateProfileView();
+                 console.log("[CLIENTE-APP][DIAG-UI] updateProfileView() llamada (sin préstamos).");
+             } catch (profileError) {
+                  console.error("[CLIENTE-APP][DIAG-UI] !!! ERROR DURANTE updateProfileView() (sin préstamos):", profileError);
+             }
+        }
+
+    }, (error) => {
+         console.error(`[CLIENTE-APP] Erro ao escutar dados do cliente ${currentClientId}:`, error);
+         showBlockedView("Erro de conexão ao carregar seus dados.");
+         signOut(auth);
+    });
 }
         
         // --- INÍCIO: REEMPLAZO COMPLETO CORREGIDO (v2) TAREFA CL5 (showCropperModal) ---
-function showCropperModal(file) {
+
+
+    function showCropperModal(file, purpose = 'profile') {
     const cropperModal = document.getElementById('cropperModal');
     if (!cropperModal) {
         console.error("Elemento #cropperModal não encontrado!");
@@ -2366,8 +2507,8 @@ function showCropperModal(file) {
             <span class="modal-title" data-lang-key="cropImage"></span>
         </header>
         <div class="modal-content-wrapper">
-            <div id="cropper-container" class="container" style="height: calc(100% - 60px);"> <!-- Ajuste altura container -->
-                 <img id="cropper-image" style="max-width: 100%; display: block;"> <!-- display:block importante -->
+            <div id="cropper-container" class="container" style="height: calc(100% - 60px);">
+                 <img id="cropper-image" style="max-width: 100%; display: block;">
             </div>
         </div>
         <div class="action-buttons">
@@ -2375,143 +2516,85 @@ function showCropperModal(file) {
             <button class="btn-primary" id="confirmCropBtn"><i data-lucide="check"></i> <span data-lang-key="confirmCrop"></span></button>
         </div>`;
 
-    // Ativa o modal e aplica idioma/ícones
-    history.pushState({ modal: 'cropperModal' }, 'Crop Image', '#crop'); // Adiciona estado ao histórico para botão voltar
+    history.pushState({ modal: 'cropperModal' }, 'Crop Image', '#crop');
     cropperModal.classList.add('active');
     lucide.createIcons({nodes: cropperModal.querySelectorAll('[data-lucide]')});
     applyLanguage(currentLang);
 
-    // Elementos e variáveis do Cropper
     const image = document.getElementById('cropper-image');
     const reader = new FileReader();
-    let cropper; // Instância do Cropper.js
+    let cropper; 
 
-    // Função para fechar e limpar o modal de forma segura
     const closeModal = () => {
          if(cropper) {
-             try {
-                 cropper.destroy(); // Libera recursos do Cropper
-                 console.log("[CLIENTE-APP] Instância do Cropper destruída.");
-             } catch (e) { console.warn("Erro ao destruir cropper (pode já ter sido destruído):", e); }
-             cropper = null; // Limpa a referência
+             try { cropper.destroy(); } catch (e) {}
+             cropper = null;
          }
-         // Verifica se o modal ainda existe antes de remover a classe
          const modalEl = document.getElementById('cropperModal');
          if (modalEl) modalEl.classList.remove('active');
-         console.log("[CLIENTE-APP] Modal de recorte fechado.");
     };
 
-    // Lê o arquivo de imagem e inicializa o Cropper.js
     reader.onload = e => {
-        if (image) { // Verifica se o elemento da imagem existe
-            image.src = e.target.result; // Define a imagem base
-            if(cropper) cropper.destroy(); // Garante destruir instância anterior
-            // Inicializa o Cropper com opções para recorte quadrado
+        if (image) {
+            image.src = e.target.result;
+            if(cropper) cropper.destroy();
             cropper = new Cropper(image, {
-                 aspectRatio: 1,       // Força recorte quadrado (1:1)
-                 viewMode: 1,          // Restringe a área de corte à tela da imagem
-                 background: false,    // Sem fundo quadriculado no recorte
-                 autoCropArea: 0.8,    // Área de corte inicial (80% da imagem)
-                 responsive: true,     // Permite redimensionar o cropper
-                 checkOrientation: false // Evita rotação automática indesejada
+                 aspectRatio: 1,
+                 viewMode: 1,
+                 background: false,
+                 autoCropArea: 0.8,
+                 responsive: true,
+                 checkOrientation: false
             });
-            console.log("[CLIENTE-APP] Cropper inicializado.");
         } else {
-             console.error("Elemento #cropper-image não encontrado ao inicializar Cropper.");
-             showToast("Erro ao inicializar ferramenta de recorte.", true);
              closeModal();
         }
     };
-    reader.onerror = error => {
-        console.error("Erro ao ler arquivo para recorte:", error);
-        showToast("Erro ao carregar imagem para recorte.", true);
-        closeModal();
-    };
-    reader.readAsDataURL(file); // Inicia a leitura do arquivo
+    reader.onerror = () => closeModal();
+    reader.readAsDataURL(file);
 
-    // --- Adiciona listeners aos botões DO MODAL RECRIADO ---
     const closeBtn = document.getElementById('closeCropperModal');
     const cancelBtn = document.getElementById('cancelCropBtn');
     const confirmBtn = document.getElementById('confirmCropBtn');
 
-    // Usa window.history.back() para fechar, aproveitando o popstate listener
     if(closeBtn) closeBtn.addEventListener('click', () => window.history.back());
     if(cancelBtn) cancelBtn.addEventListener('click', () => window.history.back());
 
-    // Listener para o botão "Confirmar Recorte"
     if(confirmBtn) {
         confirmBtn.addEventListener('click', () => {
-            if (!cropper) { // Verificação de segurança
-                 console.error("Instância do Cropper não encontrada ao confirmar recorte.");
-                 showToast("Erro: Ferramenta de recorte não iniciada.", true);
-                 return;
-            }
+            if (!cropper) return;
 
-            // Obtém a imagem recortada como um Blob (arquivo binário)
             cropper.getCroppedCanvas({
-                width: 256, // Define o tamanho da imagem de saída (ex: 256x256 pixels)
+                width: 256,
                 height: 256,
-                imageSmoothingQuality: 'high' // Qualidade da imagem
-            }).toBlob(async (blob) => { // INICIO do callback async (blob)
-                if (!blob) { // Verifica se o blob foi gerado
-                     console.error("Cropper não retornou blob ao recortar.");
+                imageSmoothingQuality: 'high'
+            }).toBlob(async (blob) => {
+                if (!blob) {
                      showToast('Erro ao recortar imagem.', true);
                      return;
                 }
 
-                // Feedback visual: adiciona classe 'loading' à imagem de perfil na UI
-                const profileViewImg = document.getElementById('profile-view-img');
-                if(profileViewImg) profileViewImg.classList.add('loading');
-
-                closeModal(); // Fecha o modal de recorte ANTES de iniciar o upload
-
-                // --- Bloco TRY/CATCH para UPLOAD no Firebase Storage e SALVAR URL no Firestore ---
-                try {
-                    // Verifica se temos os IDs necessários (companyId, clientId)
-                    if (!currentCompanyId || !currentClientId) throw new Error("IDs não definidos para upload de foto de perfil.");
-
-                    // 1. Define a RUTA específica no Firebase Storage: companies/{id_empresa}/clients/{id_cliente}/profile.jpg
-                    const storageRef = ref(storage, `companies/${currentCompanyId}/clients/${currentClientId}/profile.jpg`);
-                    console.log(`[CLIENTE-APP] Subindo foto de perfil para: ${storageRef.fullPath}`);
-                    showToast('Atualizando foto...', false); // Feedback
-
-                    // 2. Sobe o arquivo (o 'blob' já vem recortado)
-                    await uploadBytes(storageRef, blob);
-
-                    // 3. Obtém a URL de download da imagem subida
-                    const downloadURL = await getDownloadURL(storageRef);
-                    console.log(`[CLIENTE-APP] Foto de perfil subida com sucesso. URL: ${downloadURL}`);
-
-                    // 4. Salva a NOVA URL no documento do cliente no Firestore
-                    //    (A rota do Firestore já foi corrigida na Tarefa CL3)
-                    const clientDocRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
-                    await updateDoc(clientDocRef, { profilePictureUrl: downloadURL });
-
-                    showToast(translations[currentLang].picUpdateSuccess); // Mensagem de sucesso
-
-                } catch (error) { // Captura erros do Storage ou do Firestore
-                    console.error("[CLIENTE-APP] Erro ao atualizar foto de perfil (Storage/Firestore):", error);
-                    // Tenta dar um feedback mais específico do erro
-                    let errorMsg = translations[currentLang].picUpdateError; // Mensagem genérica
-                     if (error.code && error.code.startsWith('storage/')) { // Erro do Storage
-                        errorMsg = `Erro no envio da foto: ${error.code}`;
-                     } else if (error.code) { // Erro do Firestore
-                         errorMsg = `Erro ao salvar URL: ${error.code}`;
-                     }
-                    showToast(errorMsg, true); // Mostra o erro ao usuário
-                } finally {
-                    // Garante que o estado visual de 'loading' seja removido da imagem de perfil
-                    if(profileViewImg) profileViewImg.classList.remove('loading');
+                closeModal(); // Cierra el modal de recorte
+                
+                // --- [INICIO DE LA MODIFICACIÓN (BLOQUE 5/6)] ---
+                // Aquí decidimos qué función de subida llamar
+                if (purpose === 'onboarding') {
+                    // Llama a la nueva función de onboarding
+                    handleOnboardingPhotoUpload(blob);
+                } else {
+                    // Llama a la función de foto de perfil (que ahora existe)
+                    handleProfilePictureChange(blob);
                 }
-                // --- Fim do Bloco TRY/CATCH ---
+                // --- [FIN DE LA MODIFICACIÓN (BLOQUE 5/6)] ---
 
-            // *** ESTA É A CHAVE '}' CORRIGIDA QUE FECHA O CALLBACK async (blob) => { ... } ***
-            }, 'image/jpeg', 0.9); // Fim dos argumentos de toBlob
-        }); // Fim do listener do confirmBtn
+            }, 'image/jpeg', 0.9);
+        });
     } else {
          console.error("Botão #confirmCropBtn não encontrado após recriar modal.");
     }
 }
+
+
 // --- FIM: REEMPLAZO COMPLETO CORREGIDO (v2) TAREFA CL5 (showCropperModal) ---
         
         async function handleClearNotifications() {
@@ -2563,16 +2646,15 @@ function showCropperModal(file) {
                     applyTheme(newTheme);
                 }
                 if (target.closest('#header-profile-link')) {
-            location.hash = 'profile'; // Cambia el hash
-            showView('profile'); // <-- [NUEVA LÍNEA] Llama explícitamente a showView
-        }
+                    location.hash = 'profile';
+                    showView('profile');
+                }
                 const langToggle = document.getElementById('lang-toggle');
                 const langDropdown = document.getElementById('lang-dropdown');
                 if (langToggle && target.closest('#lang-toggle')) {
-                    e.stopPropagation(); // Evita que el listener de appContainer cierre el dropdown
+                    e.stopPropagation();
                     langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
                 } else if(langDropdown) {
-                    // Cierra el dropdown si se hace clic fuera de él
                     if (!target.closest('#lang-dropdown')) {
                         langDropdown.style.display = 'none';
                     }
@@ -2582,9 +2664,8 @@ function showCropperModal(file) {
                 if (langButton) {
                     const newLang = langButton.dataset.lang;
                     localStorage.setItem('language', newLang);
-                    currentLang = newLang; // Actualiza la variable global PRIMERO
-                    updateAllViews();      // LUEGO, refresca todas las vistas (incluido el historial)
-                    
+                    currentLang = newLang;
+                    updateAllViews();
                     if (langDropdown) langDropdown.style.display = 'none';
                 }
 
@@ -2598,18 +2679,16 @@ function showCropperModal(file) {
                 }
 
                 const navItem = target.closest('.nav-item');
-        if (navItem) {
-            if (navItem.classList.contains('disabled')) {
-                showToast(translations[currentLang].loanFinished);
-                return;
-            }
-            const targetView = navItem.dataset.view;
-            location.hash = targetView; // Cambia el hash
-            showView(targetView); // <-- [NUEVA LÍNEA] Llama explícitamente a showView
-        }
+                if (navItem) {
+                    if (navItem.classList.contains('disabled')) {
+                        showToast(translations[currentLang].loanFinished);
+                        return;
+                    }
+                    const targetView = navItem.dataset.view;
+                    location.hash = targetView;
+                    showView(targetView);
+                }
                 
-
-
                 if(target.closest('#logout-btn')) handleLogout();
                 
                 if(target.closest('#test-push-btn')) {
@@ -2627,57 +2706,31 @@ function showCropperModal(file) {
                     copyToClipboard(copyButton.dataset.copy, translations[currentLang].copied);
                 }
                 
-                // --- [INICIO DE LA CORRECCIÓN] ---
-                // Se elimina el listener de '#submit-receipt-btn' de esta función global.
-                // La función 'updatePayView' (a través de 'setupPaymentFormListeners')
-                // es ahora la única responsable de manejar el clic de envío.
-                /*
-                if(target.closest('#submit-receipt-btn')) {
-                    handleReceiptSubmission(target.closest('#submit-receipt-btn'));
-                }
-                */
-                // --- [FIN DE LA CORRECCIÓN] ---
-
                 const notifItem = target.closest('.notification-item.unread');
                 if (notifItem && notifItem.dataset.id) {
-                if (currentClient && currentClientId && currentCompanyId) { // Adiciona verificação de IDs
-                    // --- INÍCIO TAREFA CL3 (Notif Lida) ---
-                    const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId); // <-- ROTA NOVA
-                    // --- FIM TAREFA CL3 ---
-                    const updatedNotifications = (currentClient.notifications || []).map((n, index) => { // Garante que notifications existe
-                        const currentNotifId = n.id || `notif_${index}`;
-                        if (currentNotifId === notifItem.dataset.id) {
-                            return { ...n, read: true };
-                        }
-                        return n;
-                    });
-                    updateDoc(clientRef, { notifications: updatedNotifications })
-                        .then(() => showToast(translations[currentLang].notificationRead))
-                        .catch(err => console.error("Error marking notification as read", err));
-                }
+                    if (currentClient && currentClientId && currentCompanyId) {
+                        const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+                        const updatedNotifications = (currentClient.notifications || []).map((n, index) => {
+                            const currentNotifId = n.id || `notif_${index}`;
+                            if (currentNotifId === notifItem.dataset.id) {
+                                return { ...n, read: true };
+                            }
+                            return n;
+                        });
+                        updateDoc(clientRef, { notifications: updatedNotifications })
+                            .then(() => showToast(translations[currentLang].notificationRead))
+                            .catch(err => console.error("Error marking notification as read", err));
+                    }
                 }
             });
+
             appContainer.addEventListener('change', e => {
+                // --- [INICIO DE LA MODIFICACIÓN (BLOQUE 6/6)] ---
                 if (e.target.id === 'profile-pic-input' && e.target.files && e.target.files[0]) {
-                    showCropperModal(e.target.files[0]);
+                    // ¡Añadimos el propósito 'profile' aquí!
+                    showCropperModal(e.target.files[0], 'profile');
                 }
-                // --- [INICIO DE LA CORRECCIÓN] ---
-                // Esta escucha también es redundante y puede causar problemas
-                // si 'updatePayView' no se ha ejecutado.
-                // La escucha de 'receipt-file-input' también se maneja
-                // dentro de 'setupPaymentFormListeners' en 'updatePayView'.
-                /*
-                if (e.target.id === 'receipt-file-input' && e.target.files && e.target.files[0]) {
-                    receiptFile = e.target.files[0];
-                    const preview = document.getElementById('receipt-preview');
-                    const uploadLabel = document.getElementById('upload-label-text');
-                    preview.src = URL.createObjectURL(receiptFile);
-                    preview.style.display = 'block';
-                    uploadLabel.style.display = 'none';
-                    document.getElementById('submit-receipt-btn').disabled = false;
-                }
-                */
-                // --- [FIN DE LA CORRECCIÓN] ---
+                // --- [FIN DE LA MODIFICACIÓN (BLOQUE 6/6)] ---
             });
         }
         
@@ -3134,4 +3187,5 @@ init();
     </script>
 </body>
 </html>
+
 
