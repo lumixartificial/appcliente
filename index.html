@@ -430,17 +430,16 @@
 }
 
 
-    #desafioModal .modal-content {
-    padding: 0; /* Sin padding para que el video ocupe todo */
-    overflow: hidden; /* Oculta bordes del video */
-    position: relative; /* Para superponer elementos */
+#desafioModal .modal-content {
+    padding: 0;
+    overflow: hidden;
+    position: relative;
     background-color: #000;
 }
 #desafio-video-container {
     position: relative;
     width: 100%;
-    /* Forzamos un aspect-ratio de 4:3 (cámara selfie) */
-    padding-top: 133.33%; 
+    padding-top: 133.33%; /* Aspecto 4:3 */
     background-color: #000;
 }
 #desafio-video {
@@ -449,59 +448,86 @@
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover; /* Rellena el contenedor */
-    /* Espejado para vista selfie */
-    transform: scaleX(-1); 
+    object-fit: cover;
+    transform: scaleX(-1); /* Espejado selfie */
 }
+
+/* --- Nuevos Estilos para el Óvalo y Máscara --- */
+#desafio-mask {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Fondo oscuro semitransparente que cubre todo */
+    background: rgba(0,0,0,0.7); 
+}
+#desafio-oval {
+    width: 250px;
+    height: 350px; /* Más alto para un óvalo facial */
+    border: 3px solid white;
+    border-radius: 50%; /* Esto crea el óvalo */
+    /* La magia: corta un agujero transparente en la máscara */
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.7);
+    position: relative;
+    opacity: 0.8;
+}
+/* --- Fin Estilos Óvalo --- */
+
+/* --- Nuevos Estilos para Efectos "Geniales" --- */
+@keyframes scan {
+    0% { top: 10%; }
+    50% { top: 90%; }
+    100% { top: 10%; }
+}
+#desafio-scanner-line {
+    position: absolute;
+    top: 10%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, rgba(111, 66, 193, 0.7), transparent);
+    box-shadow: 0 0 10px rgba(111, 66, 193, 0.5);
+    animation: scan 4s infinite ease-in-out;
+    border-radius: 2px;
+    z-index: 2; /* Encima del óvalo */
+}
+/* --- Fin Estilos Efectos --- */
+
 #desafio-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-end; /* Instrucción abajo */
     align-items: center;
     padding: 30px;
-    /* Añadimos un gradiente suave para legibilidad */
-    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.6) 100%);
+    pointer-events: none; /* Permite clics (aunque no hay) */
 }
 #desafio-instruction {
-    font-size: 1.2em;
+    font-size: 1.3em;
     font-weight: 600;
     color: white;
-    background-color: rgba(0,0,0,0.5);
-    padding: 10px 15px;
-    border-radius: 8px;
     text-align: center;
-    margin-top: 20px;
-}
-#desafio-shutter-btn {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    background-color: white;
-    border: 5px solid rgba(255,255,255,0.3);
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-    margin-bottom: 20px;
-}
-#desafio-shutter-btn:active {
-    transform: scale(0.95);
+    margin-bottom: 40px; /* Espacio desde abajo */
+    text-shadow: 0 2px 5px rgba(0,0,0,0.6);
+    line-height: 1.4;
+    padding: 0 20px;
 }
 #desafio-loading-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(0,0,0,0.7);
-    display: none; /* Oculto por defecto */
+    background-color: rgba(0,0,0,0.8);
+    display: none;
     justify-content: center;
     align-items: center;
     color: white;
     z-index: 10;
 }
-/* Canvas oculto para tomar la foto */
 #desafio-canvas {
     display: none;
 }
+
 
 
 
@@ -2167,23 +2193,41 @@ function stopChallengeCamera() {
     }
 }
 
+/* === INICIO: CÓDIGO AÑADIDO (FASE 2.1 - BLOQUE 2/3) === */
+/**
+ * Helper para crear pausas en funciones async
+ * @param {number} ms - Milisegundos a esperar
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+/* === FIN: CÓDIGO AÑADIDO (FASE 2.1 - BLOQUE 2/3) === */
+
+
+/* === INICIO: REEMPLAZO COMPLETO (FASE 2.1 - BLOQUE 3/3) === */
 /**
  * Muestra el modal de desafío de prueba de vida (selfie)
+ * (Versión 2.0 con secuencia automática)
  */
 async function showDesafioModal(monto, parcelas) {
     const modal = document.getElementById('desafioModal');
     if (!modal) return;
 
-    // HTML del modal
+    // --- [INICIO] NUEVO HTML (sin botón de captura, con máscara) ---
     modal.innerHTML = `
         <div class="modal-content">
             <div id="desafio-video-container">
                 <video id="desafio-video" autoplay playsinline muted></video>
                 <canvas id="desafio-canvas"></canvas>
                 
+                <!-- Nueva máscara con óvalo y efectos -->
+                <div id="desafio-mask">
+                    <div id="desafio-oval"></div>
+                    <div id="desafio-scanner-line"></div>
+                </div>
+
                 <div id="desafio-overlay">
-                    <span id="desafio-instruction">Centralize seu rosto</span>
-                    <button id="desafio-shutter-btn" title="Tirar Foto"></button>
+                    <span id="desafio-instruction">Iniciando câmera...</span>
                 </div>
                 
                 <div id="desafio-loading-overlay">
@@ -2192,26 +2236,29 @@ async function showDesafioModal(monto, parcelas) {
             </div>
         </div>
     `;
+    // --- [FIN] NUEVO HTML ---
     
     modal.classList.add('active');
     lucide.createIcons({ nodes: modal.querySelectorAll('[data-lucide]') });
 
     const video = document.getElementById('desafio-video');
-    const shutterBtn = document.getElementById('desafio-shutter-btn');
     const loadingOverlay = document.getElementById('desafio-loading-overlay');
+    const instructionEl = document.getElementById('desafio-instruction');
     
-    // 1. Iniciar Cámara
+    // Obtenemos el botón del formulario anterior para restaurarlo en caso de error
+    const submitBtn = document.querySelector('#refinance-form button[type="submit"]');
+    
+    // 1. Iniciar Cámara (misma lógica de error que antes)
     try {
-        // Detiene cualquier stream anterior (por si acaso)
         stopChallengeCamera(); 
-        
-        // Pide el stream de video (cámara frontal)
         currentChallengeStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' },
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
             audio: false 
         });
         
         video.srcObject = currentChallengeStream;
+        await video.play(); // Espera a que el video comience
+
     } catch (err) {
         console.error("[CLIENTE-APP] Erro ao acessar a câmera:", err);
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -2221,8 +2268,8 @@ async function showDesafioModal(monto, parcelas) {
         }
         modal.classList.remove('active');
         stopChallengeCamera();
-        // IMPORTANTE: Restaura el botón del formulario de refinanciamiento si la cámara falla
-        const submitBtn = document.querySelector('#refinance-form button[type="submit"]');
+        
+        // ¡Crucial! Restaura el botón del formulario de refinanciamiento
         if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = `<span data-lang-key="sendForAnalysis">${translations[currentLang].sendForAnalysis}</span>`;
@@ -2230,36 +2277,57 @@ async function showDesafioModal(monto, parcelas) {
         return;
     }
 
-    // 2. Listener del Botón de Captura
-    shutterBtn.onclick = () => {
+    // --- [INICIO] NUEVA SECUENCIA DE DESAFÍO AUTOMÁTICO ---
+    try {
+        // Desafío 1: Centrar
+        instructionEl.textContent = "Centralize seu rosto no círculo";
+        await sleep(3000); // 3 segundos para centrar
+
+        // Desafío 2: Sonreír (El desafío que pediste)
+        instructionEl.textContent = "Ótimo! Agora, SORRIA para a câmera";
+        await sleep(3000); // 3 segundos para sonreír
+
+        // Desafío 3: Captura
+        instructionEl.textContent = "Capturando...";
         loadingOverlay.style.display = 'flex'; // Muestra el spinner
-        
+        await sleep(500); // Pequeña pausa para que el spinner aparezca
+
+        // Lógica de captura (la que estaba en el botón 'onclick')
         const canvas = document.getElementById('desafio-canvas');
         const context = canvas.getContext('2d');
         
-        // Ajusta el tamaño del canvas al del video
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
-        // Dibuja la imagen (espejada, igual que el video)
         context.save();
-        context.scale(-1, 1); // Espeja horizontalmente
+        context.scale(-1, 1); 
         context.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-        context.restore(); // Restaura el contexto
+        context.restore(); 
         
-        // Detiene la cámara INMEDIATAMENTE después de la foto
-        stopChallengeCamera(); 
+        stopChallengeCamera(); // Detiene la cámara INMEDIATAMENTE
         
-        // Convierte a Blob y sube
         canvas.toBlob((blob) => {
-            handleDesafioPhotoUpload(blob, monto, parcelas);
+            // Esta función ya se encarga de subir y cerrar el modal
+            handleDesafioPhotoUpload(blob, monto, parcelas); 
         }, 'image/jpeg', 0.9);
-    };
+
+    } catch (challengeError) {
+        // Error durante la secuencia (poco probable)
+        console.error("Error durante la secuencia de desafío:", challengeError);
+        showToast("Ocorreu um erro durante a verificação.", true);
+        modal.classList.remove('active');
+        stopChallengeCamera();
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span data-lang-key="sendForAnalysis">${translations[currentLang].sendForAnalysis}</span>`;
+        }
+    }
+    // --- [FIN] NUEVA SECUENCIA DE DESAFÍO ---
 }
 
-/**
- * Sube la foto del desafío y llama a guardar la solicitud
- */
+
+
+
 async function handleDesafioPhotoUpload(blob, monto, parcelas) {
     if (!blob) {
         showToast("Erro ao capturar foto.", true);
@@ -3476,3 +3544,4 @@ init();
     </script>
 </body>
 </html>
+
