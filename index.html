@@ -3369,7 +3369,6 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         }
 
 
-        
         function init() {
     // --- Service Worker Registration (SEM ALTERAÇÕES) ---
     if ('serviceWorker' in navigator) {
@@ -3385,15 +3384,75 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
       }
     }
 
-    // --- Popstate listener (SEM ALTERAÇÕES) ---
-    window.addEventListener('popstate', () => { /* ... (código existente) ... */ });
+    // --- Popstate listener (CORRIGIDO) ---
+    // Esta lógica maneja el botón "atrás" del navegador para cerrar modales
+    window.addEventListener('popstate', (event) => {
+        console.log("[POPSTATE] Evento popstate disparado. Novo estado:", event.state);
+        
+        // Cierra TODOS los modales (overlays y vistas de slide)
+        document.querySelectorAll('.modal-view.active, .modal-overlay.active').forEach(modal => {
+            console.log(`[POPSTATE] Forçando fechamento do modal: #${modal.id}`);
+            modal.classList.remove('active');
+        });
 
-    // --- Lógica do Banner PWA (SEM ALTERAÇÕES) ---
-    window.addEventListener('beforeinstallprompt', (e) => { /* ... (código existente) ... */ });
+        // Lógica para reabrir un modal si el estado lo indica (navegación entre modales)
+        if (event.state && event.state.modal) {
+            const modalToRestore = document.getElementById(event.state.modal);
+            if (modalToRestore) {
+                console.log(`[POPSTATE] Restaurando modal: #${modalToRestore.id}`);
+                modalToRestore.classList.add('active');
+                
+                // Si volvemos a la vista de detalles del cliente, refresca los datos
+                if (event.state.modal === 'clientDetailView' && event.state.clientId) {
+                    console.log(`[POPSTATE] Restaurando e atualizando clientDetailView...`);
+                    showClientDetails(event.state.clientId, event.state.loanIndex || 0);
+                }
+            }
+        } else {
+            // Si no hay estado de modal, estamos volviendo a una vista principal.
+            // Actualiza la vista principal basada en el hash.
+            const viewName = location.hash.substring(1) || 'home';
+            console.log(`[POPSTATE] Voltando para a vista principal: ${viewName}`);
+            showView(viewName);
+        }
+    });
+
+    // --- Lógica do Banner PWA (CORRIGIDO) ---
+    // Esta es la lógica que captura el evento de instalación
+    window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('[CLIENTE-APP] beforeinstallprompt event fired');
+        e.preventDefault();
+        deferredPrompt = e;
+        const installBanner = document.getElementById('install-banner');
+        if (installBanner) {
+            installBanner.style.display = 'block';
+            // Nos aseguramos de aplicar el idioma correcto al banner
+            applyLanguage(currentLang);
+        }
+    });
+    
+    // Lógica del botón "Instalar"
     const installBtn = document.getElementById('install-btn');
-    if (installBtn) { /* ... (código existente) ... */ }
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            const installBanner = document.getElementById('install-banner');
+            if (installBanner) installBanner.style.display = 'none';
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`[CLIENTE-APP] User response to the install prompt: ${outcome}`);
+                deferredPrompt = null;
+            }
+        });
+    }
+    
+    // Lógica del botón "Cerrar (X)" del banner
     const closeInstallBtn = document.getElementById('close-install-banner');
-    if (closeInstallBtn) { /* ... (código existente) ... */ }
+    if (closeInstallBtn) {
+        closeInstallBtn.addEventListener('click', () => {
+            document.getElementById('install-banner').style.display = 'none';
+        });
+    }
 
     // --- Aplica tema e idioma iniciais (SEM ALTERAÇÕES) ---
     const preferredTheme = localStorage.getItem('theme') || 'dark';
@@ -3544,6 +3603,13 @@ async function sendNotificationToCollector(title, body, type = 'payment', icon =
         }
     });
 }
+
+
+
+
+
+        
+        
 init();
 
 
@@ -3551,4 +3617,6 @@ init();
     </script>
 </body>
 </html>
+
+
 
