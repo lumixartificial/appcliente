@@ -1298,122 +1298,116 @@ async function handleOnboardingPhotoUpload(blob) {
         }
 
         async function checkAndSendLatePaymentNotifications() {
-            const LOG_PREFIX = `[CLIENTE-APP]`;
-            if (!currentClient || !currentClient.loans || currentClient.loans.length === 0 || !currentCompanyId || !currentClientId) return;
+    const LOG_PREFIX = `[CLIENTE-APP]`;
+    if (!currentClient || !currentClient.loans || currentClient.loans.length === 0 || !currentCompanyId || !currentClientId) return;
 
-            // console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de atrasos para TODOS los préstamos...`);
+    // console.log(`${LOG_PREFIX} -> checkAndSendLatePaymentNotifications: Iniciando verificación de atrasos para TODOS los préstamos...`);
 
-            const now = new Date();
-            const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+    const now = new Date();
+    const clientRef = doc(db, 'companies', currentCompanyId, 'clients', currentClientId);
+    
+    let updatesNeeded = false; 
+    let updatedLoans = JSON.parse(JSON.stringify(currentClient.loans)); 
+    let newInternalNotifications = []; 
+
+    for (let i = 0; i < updatedLoans.length; i++) {
+        const loan = updatedLoans[i];
+        
+        const details = calculateLoanDetails(loan); 
+        const lateInstallments = details.lateDays; 
+        
+        if (details.status !== 'late') {
+            continue; 
+        }
+
+        console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: ¡ATRASADO! Días: ${lateInstallments}`);
+        
+        // --- [INICIO DE LA CORRECCIÓN DEL BUG] ---
+        // La lógica anterior fallaba al leer el timestamp después de JSON.stringify.
+        
+        let lastNotificationTimestamp = null;
+        if (loan.lastLateNotificationTimestamp) {
             
-            let updatesNeeded = false; // Flag para saber si necesitamos actualizar Firestore
-            // Hacemos una copia profunda de los préstamos actuales para modificarla
-            let updatedLoans = JSON.parse(JSON.stringify(currentClient.loans)); 
-            let newInternalNotifications = []; // Acumulador para las nuevas notificaciones
-
-            // Iterar por CADA préstamo que tenga el cliente
-            for (let i = 0; i < updatedLoans.length; i++) {
-                const loan = updatedLoans[i];
-                
-                // 1. Calcular el estado REAL del préstamo
-                const details = calculateLoanDetails(loan); // Usamos la función robusta
-                const lateInstallments = details.lateDays; // Obtenemos los días de atraso
-                
-                // Si no está 'late' (puede ser 'pending', 'paid', 'finished'), no hacemos nada
-                if (details.status !== 'late') {
-                    // console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: OK (Estado: ${details.status}).`);
-                    continue; // Vamos al siguiente préstamo
-                }
-
-                // 2. El préstamo ESTÁ ATRASADO. Verificar cuándo fue la última notificación.
-                console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: ¡ATRASADO! Días: ${lateInstallments}`);
-                
-                // [LÍNEA ORIGINAL CON ERROR]
-                // const lastNotificationTimestamp = loan.lastLateNotificationTimestamp?.toDate(); 
-                
-                // --- [INICIO DE LA CORRECCIÓN] ---
-                // 'loan.lastLateNotificationTimestamp' puede ser un string (de JSON.stringify)
-                // o un Timestamp. Necesitamos un objeto Date de JS.
-                let lastNotificationTimestamp = null;
-                if (loan.lastLateNotificationTimestamp) {
-                    if (typeof loan.lastLateNotificationTimestamp.toDate === 'function') {
-                        // Caso 1: Es un Timestamp de Firestore (improbable aquí, pero seguro)
-                        lastNotificationTimestamp = loan.lastLateNotificationTimestamp.toDate();
-                    } else {
-                        // Caso 2: Es un string ISO (el caso más probable) o un objeto Date.
-                        // new Date() puede parsear ambos.
-                        lastNotificationTimestamp = new Date(loan.lastLateNotificationTimestamp);
-                    }
-                }
-                // --- [FIN DE LA CORRECCIÓN] ---
-                
-                // 3. Definir la frecuencia requerida
-                let requiredIntervalHours;
-                if (lateInstallments === 1) {
-                    // 1 día de atraso: 1 vez al día (aprox 22 horas para dar margen)
-                    requiredIntervalHours = 22; 
-                } else {
-                    // 2+ días de atraso: 2 veces al día (aprox 12 horas)
-                    requiredIntervalHours = 12;
-                }
-
-                const hoursAgo = new Date(now.getTime() - (requiredIntervalHours * 60 * 60 * 1000));
-
-                // 4. Decidir si enviar
-                if (lastNotificationTimestamp && lastNotificationTimestamp > hoursAgo) {
-                    console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Notificación suprimida (enviada hace menos de ${requiredIntervalHours}h).`);
-                    continue; // Ya se notificó, vamos al siguiente préstamo
-                }
-
-                // 5. Es necesario enviar. Preparar el mensaje.
-                console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Enviando notificación (Atraso: ${lateInstallments} días).`);
-                
-                let title, body, type, icon;
-                // Identificador "Préstamo 1", "Préstamo 2", etc.
-                const loanIdentifier = `${translations[currentLang].loanLabel} ${i + 1}`; 
-
-                if (lateInstallments === 1) {
-                    title = `${translations[currentLang].latePaymentReminderTitle} (${loanIdentifier})`;
-                    body = translations[currentLang].latePaymentReminderBody;
-                    type = 'late_reminder';
-                    icon = 'alarm-clock';
-                } else { 
-                    // Mensaje creativo (como pediste)
-                    title = `${translations[currentLang].urgentWarningTitle} (${loanIdentifier})`;
-                    body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments) + " " + translations[currentLang].reputationInfo; 
-                    type = 'urgent_warning';
-                    icon = 'alert-triangle';
-                }
-
-                // 6. CREAR el ticket PUSH y OBTENER el objeto de notificación interna
-                const newNotifObject = await sendNotificationTicket(title, body, type, icon);
-
-                if (newNotifObject) {
-                    // 7. ACUMULAR la notificación interna
-                    newInternalNotifications.push(newNotifObject);
-                    // y ACTUALIZAR el timestamp del préstamo (en nuestra copia local)
-                    loan.lastLateNotificationTimestamp = new Date(); 
-                    updatesNeeded = true;
-                }
-            }
-
-            // 8. Si hicimos algún cambio, actualizamos Firestore UNA VEZ.
-            if (updatesNeeded) {
-                console.log(`${LOG_PREFIX} -> Actualizando Firestore con ${newInternalNotifications.length} nuevas notificaciones y timestamps...`);
-                
-                // Obtenemos las notificaciones antiguas (de la copia de currentClient)
-                const oldNotifications = currentClient.notifications || [];
-                
-                // Actualizamos el documento del cliente con los préstamos modificados Y las nuevas notificaciones
-                await updateDoc(clientRef, { 
-                    loans: updatedLoans, // El array de préstamos con los nuevos timestamps
-                    notifications: [...oldNotifications, ...newInternalNotifications] // Añadimos las nuevas notificaciones
-                }); 
-                console.log(`${LOG_PREFIX} -> Firestore actualizado.`);
+            if (typeof loan.lastLateNotificationTimestamp.toDate === 'function') {
+                // Caso 1: Es un objeto Timestamp de Firestore (improbable después de stringify, pero seguro)
+                lastNotificationTimestamp = loan.lastLateNotificationTimestamp.toDate();
+            
+            } else if (loan.lastLateNotificationTimestamp.seconds) {
+                // Caso 2: ¡EL FIX! Es un objeto serializado por JSON (ej: {seconds: 123, nanoseconds: 456})
+                // Lo leemos usando .seconds
+                lastNotificationTimestamp = new Date(loan.lastLateNotificationTimestamp.seconds * 1000);
+            
             } else {
-                // console.log(`${LOG_PREFIX} -> Verificación de atrasos finalizada. Sin notificaciones nuevas para enviar.`);
+                // Caso 3: Es un string ISO (si un objeto Date de JS fue stringificado)
+                lastNotificationTimestamp = new Date(loan.lastLateNotificationTimestamp);
             }
         }
+        
+        // --- [FIN DE LA CORRECCIÓN DEL BUG] ---
+
+        
+        let requiredIntervalHours;
+        if (lateInstallments === 1) {
+            requiredIntervalHours = 22; 
+        } else {
+            requiredIntervalHours = 12;
+        }
+
+        const hoursAgo = new Date(now.getTime() - (requiredIntervalHours * 60 * 60 * 1000));
+
+        // 4. Decidir si enviar
+        if (lastNotificationTimestamp && lastNotificationTimestamp > hoursAgo && lastNotificationTimestamp instanceof Date && !isNaN(lastNotificationTimestamp)) {
+             // Verificación extra: (lastNotificationTimestamp instanceof Date && !isNaN(lastNotificationTimestamp))
+             // se asegura de que la fecha sea válida antes de suprimir.
+            console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Notificación suprimida (enviada hace menos de ${requiredIntervalHours}h).`);
+            continue; // Ya se notificó, vamos al siguiente préstamo
+        }
+
+        // 5. Es necesario enviar. Preparar el mensaje.
+        console.log(`${LOG_PREFIX} -> Préstamo ${i + 1}: Enviando notificación (Atraso: ${lateInstallments} días).`);
+        
+        let title, body, type, icon;
+        const loanIdentifier = `${translations[currentLang].loanLabel} ${i + 1}`; 
+
+        if (lateInstallments === 1) {
+            title = `${translations[currentLang].latePaymentReminderTitle} (${loanIdentifier})`;
+            body = translations[currentLang].latePaymentReminderBody;
+            type = 'late_reminder';
+            icon = 'alarm-clock';
+        } else { 
+            title = `${translations[currentLang].urgentWarningTitle} (${loanIdentifier})`;
+            body = translations[currentLang].urgentWarningBody.replace('{count}', lateInstallments) + " " + translations[currentLang].reputationInfo; 
+            type = 'urgent_warning';
+            icon = 'alert-triangle';
+        }
+
+        // 6. CREAR el ticket PUSH y OBTENER el objeto de notificación interna
+        const newNotifObject = await sendNotificationTicket(title, body, type, icon);
+
+        if (newNotifObject) {
+            // 7. ACUMULAR la notificación interna
+            newInternalNotifications.push(newNotifObject);
+            // y ACTUALIZAR el timestamp del préstamo (en nuestra copia local)
+            loan.lastLateNotificationTimestamp = new Date(); 
+            updatesNeeded = true;
+        }
+    }
+
+    // 8. Si hicimos algún cambio, actualizamos Firestore UNA VEZ.
+    if (updatesNeeded) {
+        console.log(`${LOG_PREFIX} -> Actualizando Firestore con ${newInternalNotifications.length} nuevas notificaciones y timestamps...`);
+        
+        const oldNotifications = currentClient.notifications || [];
+        
+        await updateDoc(clientRef, { 
+            loans: updatedLoans, // El array de préstamos con los nuevos timestamps
+            notifications: [...oldNotifications, ...newInternalNotifications] // Añadimos las nuevas notificaciones
+        }); 
+        console.log(`${LOG_PREFIX} -> Firestore actualizado.`);
+    } else {
+        // console.log(`${LOG_PREFIX} -> Verificación de atrasos finalizada. Sin notificaciones nuevas para enviar.`);
+    }
+}
 
         function applyLanguage(lang) {
             currentLang = lang;
@@ -3617,6 +3611,4 @@ init();
     </script>
 </body>
 </html>
-
-
 
