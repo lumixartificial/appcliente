@@ -739,6 +739,7 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script type="module">
+        import { calculateLoanDetails } from "./loan-calculations.js?v=20261023-0100";
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; // <-- Adicionado collectionGroup aqui
@@ -753,7 +754,7 @@
             messagingSenderId: "463777495321",
             appId: "1:463777495321:web:106118f53f56abd206ed88"
         };
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig, 'lumix-cliente');
         const db = getFirestore(app);
         const auth = getAuth(app);
         const storage = getStorage(app);
@@ -1466,7 +1467,7 @@ async function handleOnboardingPhotoUpload(blob) {
         }
         
 
-        function calculateLoanDetails(loan) {
+        function legacyCalculateLoanDetails(loan) {
     let details = {
         lateDays: 0,
         lateFeesAccumulated: 0,
@@ -1603,6 +1604,8 @@ async function handleOnboardingPhotoUpload(blob) {
 
 
         function calculateLatePaymentDays(loan) {
+            return calculateLoanDetails(loan).lateDays;
+            /* Lógica antiga mantida temporariamente abaixo apenas como referência de migração. */
             if (!loan || (loan.paid || 0) >= (loan.totalLoan || 0)) return 0;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
