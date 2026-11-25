@@ -1,4 +1,4 @@
-const SW_VERSION = "v9.4-robusto"; // Versión actualizada
+const SW_VERSION = "v9.5-cliente-atrasos";
 
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
